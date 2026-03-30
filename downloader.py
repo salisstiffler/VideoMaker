@@ -141,12 +141,10 @@ class VideoDownloader:
             "--no-warnings",
             "--no-playlist",
             "--merge-output-format", "mp4",
-            # Prefer 1080p h264, fallback to best video+audio, then best single stream
-            "--format", "bestvideo[height>=1080][vcodec^=avc1]+bestaudio/bestvideo[height>=720][vcodec^=avc1]+bestaudio/bestvideo+bestaudio/best",
-            # Sort by resolution descending, then fps, then codec preference
-            "--format-sort", "res:1080,fps,codec:avc1",
-            # mweb is currently most reliable; ios as secondary
-            "--extractor-args", "youtube:player_client=mweb,ios,web",
+            # General fallback: Prefer 1080p, but allow 720p or lower if needed.
+            # Don't strictly force avc1 in the selector, just sort it higher.
+            "--format", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+            "--format-sort", "res:1080,vcodec:avc1,fps,size",
             "--socket-timeout", "30",
             # Download video in 8 parallel fragments — much faster on fast connections
             "--concurrent-fragments", "8",
@@ -158,16 +156,15 @@ class VideoDownloader:
         # Export cookies with "Get cookies.txt LOCALLY" Chrome extension,
         # save as youtube_cookies.txt next to this script.
         # ------------------------------------------------------------------ #
-        cookie_file = "youtube_cookies.txt"
         if os.path.exists(cookie_file):
-            # With cookies, use default web client (yields avc1 high-res streams).
-            # Do NOT restrict vcodec here — let format-sort pick the best.
+            # Strategy 1 with cookies: Allow more formats (avc1 preferred but not strictly required)
             cookie_cmd = [
                 "yt-dlp",
                 "--no-check-certificate", "--no-warnings", "--no-playlist",
                 "--merge-output-format", "mp4",
-                "--format", "bestvideo[height>=1080]+bestaudio/bestvideo[height>=720]+bestaudio/bestvideo+bestaudio/best",
-                "--format-sort", "res:1080,fps,codec:avc1",
+                # Best video+audio, prefer 1080p, fallback to 720p or any.
+                "--format", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
+                "--format-sort", "res:1080,vcodec:avc1,fps,size",
                 "--concurrent-fragments", "8",
                 "--socket-timeout", "30",
                 "--cookies", cookie_file,
