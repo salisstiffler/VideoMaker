@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Project specific
+downloads/
+output/
+final_outputs/
+processed_videos.txt
+youtube_cookies.txt
+*.mp4
+*.wav
+*.srt
+*.m4a
+
+# Virtual environment
+venv/
+.venv/
+env/
