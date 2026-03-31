@@ -58,18 +58,36 @@ def process_video_task(url, dl, editor):
         video_path, title = find_existing_video(url, dl)
         if video_path:
             print(f"[+] Found existing video: {video_path}")
-        else:
+        if not video_path or not os.path.exists(video_path):
             print(f"[*] Downloading: {url}")
-            video_path, title = dl.download_video(url)
+            video_path, title, thb_path = dl.download_video(url)
+        else:
+            # Check for existing thumbnail if video was already downloaded
+            thb_path = dl._find_thumbnail(os.path.dirname(video_path))
 
         if not video_path or not os.path.exists(video_path):
             print(f"[-] Failed to obtain video for {url}")
             return
 
+        # ------------------------------------------------------------------ #
+        # 1. Generate Bilingual Subtitles
+        # ------------------------------------------------------------------ #
         result = editor.generate_subtitles(video_path)
         if not result: return
         srt_path, segments, translated_texts = result
+        
+        # Get video-specific output dir from editor (already created in generate_subtitles)
+        video_out_dir = os.path.dirname(srt_path)
 
+        # ------------------------------------------------------------------ #
+        # 2. Generate Automatic Covers (Horizontal/Vertical)
+        # ------------------------------------------------------------------ #
+        if thb_path:
+            editor.generate_covers(thb_path, video_out_dir)
+
+        # ------------------------------------------------------------------ #
+        # 3. Audio & Dubbing
+        # ------------------------------------------------------------------ #
         dub_path = None
         inst_path = None
         ref_audio = "my_voice.wav"
@@ -84,6 +102,9 @@ def process_video_task(url, dl, editor):
             inst_path, _ = editor.separate_audio(video_path)
             dub_path = editor.generate_dubbing(segments, translated_texts, ref_audio, video_path)
 
+        # ------------------------------------------------------------------ #
+        # 4. Final Assembly
+        # ------------------------------------------------------------------ #
         logo_path = DEFAULT_LOGO if os.path.exists(DEFAULT_LOGO) else None
         final_path = editor.burn_subtitles(
             video_path, srt_path, DEFAULT_MARGIN, logo_path, 

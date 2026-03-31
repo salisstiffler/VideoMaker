@@ -9,6 +9,7 @@ import translators as ts
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 import torchaudio
 from pydub import AudioSegment
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def monkey_patch_torchaudio():
     """Monkey-patch torchaudio.load to use pydub as a fallback to avoid libtorchcodec error."""
@@ -258,22 +259,22 @@ class VideoEditor:
         
         base_name = os.path.splitext(os.path.basename(video_path))[0]
         # audio-separator typically names files with specific suffixes
-        # We search for existing files in current dir
+        # SEARCH in video_output_dir instead of root
         found_inst = ""
         found_voc = ""
-        for f in os.listdir("."):
+        for f in os.listdir(video_output_dir):
             if f.startswith(base_name) and "Instrumental" in f:
-                found_inst = os.path.abspath(f)
+                found_inst = os.path.join(video_output_dir, f)
             if f.startswith(base_name) and "Vocals" in f:
-                found_voc = os.path.abspath(f)
+                found_voc = os.path.join(video_output_dir, f)
 
         if found_inst and found_voc:
             print(f"[+] 发现现有分离音频，正在加载: {os.path.basename(found_inst)}")
             return found_inst, found_voc
 
         if self.separator is None:
-            # Pass device to audio-separator
-            self.separator = Separator(device=self.device)
+            # audio-separator handles device auto-detection or through model loading
+            self.separator = Separator()
             # Try a very standard model name
             try:
                 self.separator.load_model("UVR-MDX-NET-Voc_FT.onnx")
@@ -281,16 +282,31 @@ class VideoEditor:
                 print("[!] 默认模型加载失败，尝试备选模型 UVR-MDX-NET-Inst_HQ_3.onnx...")
                 self.separator.load_model("UVR-MDX-NET-Inst_HQ_3.onnx")
 
+        # Perform separation (defaulting to current directory)
+        print(f"[*] Separating audio segments...")
         output_files = self.separator.separate(video_path)
-        # Typically returns two files: Instrumental and Vocals
+        
+        # 🚀 Manually move files to ensure they go to the right video-specific folder
         inst_path = ""
         voc_path = ""
+        import shutil
         for f in output_files:
-            full_path = os.path.join(os.getcwd(), f)
-            if "Instrumental" in f:
-                inst_path = full_path
-            elif "Vocals" in f:
-                voc_path = full_path
+            source_path = os.path.join(os.getcwd(), f)
+            dest_path = os.path.join(video_output_dir, f)
+            try:
+                # Move if distinct, or just update full_path
+                if os.path.abspath(source_path) != os.path.abspath(dest_path):
+                    shutil.move(source_path, dest_path)
+                
+                if "Instrumental" in f:
+                    inst_path = dest_path
+                elif "Vocals" in f:
+                    voc_path = dest_path
+            except Exception as e:
+                print(f"[!] Error moving separated file {f}: {e}")
+                # Fallback to current path if move fails
+                if "Instrumental" in f: inst_path = source_path
+                if "Vocals" in f: voc_path = source_path
 
         print(f"[+] 分离完成: 背景音->{os.path.basename(inst_path)}, 人声->{os.path.basename(voc_path)}")
         return inst_path, voc_path
@@ -316,23 +332,18 @@ class VideoEditor:
         voice_seg_dir = os.path.join(video_output_dir, "temp_voice")
         os.makedirs(voice_seg_dir, exist_ok=True)
         
-        dub_path = os.path.abspath(os.path.join(output_dir, "full_dub.wav"))
-        if os.path.exists(dub_path):
-            print(f"[+] 发现现有配音文件: {dub_path}")
-            return dub_path
-
+        # 🚀 统一路径：不再使用根目录下的 full_dub.wav
         if self.tts is None:
             print(f"[*] Loading F5TTS on {self.device}...")
             try:
                 self.tts = F5TTS(device=self.device)
             except Exception as e:
+                # Fallback for model corruption
                 if "Consistency check failed" in str(e):
                     print("[!] 检测到模型文件损坏，正在尝试强制重新下载 (force_download=True)...")
                     self.tts = F5TTS(device=self.device, force_download=True)
                 else:
                     raise e
-
-        os.makedirs(os.path.join(output_dir, "temp_voice"), exist_ok=True)
         
         # We'll create a silent base track first (or just use pydub to overlay)
         # To keep it simple, we generate each segment and then overlay it on a silent track of original length.
@@ -363,7 +374,7 @@ class VideoEditor:
             if not text.strip() or (end - start) < 0.3: 
                 continue
             
-            temp_wav = os.path.join(output_dir, "temp_voice", f"seg_{i}.wav")
+            temp_wav = os.path.join(voice_seg_dir, f"seg_{i}.wav")
             # F5-TTS infer: Bypass infer_process and call infer_batch_process directly to avoid chunking issues
             with suppress_output():
                 from f5_tts.infer.utils_infer import infer_batch_process
@@ -498,7 +509,8 @@ class VideoEditor:
             # Video part
             if logo_idx != -1:
                 filters.append(f"[{logo_idx}:v]crop='min(iw,ih)':'min(iw,ih)'[sq]")
-                filters.append(f"[sq][0:v]scale2ref=w='oh*md5':h='ih/10'[logo_raw][main]")
+                # 修复: 'md5' -> '1' (因为 logo 已经过 crop 变成正方形，宽高比为 1)
+                filters.append(f"[sq][0:v]scale2ref=w='oh':h='ih/10'[logo_raw][main]")
                 filters.append(f"[logo_raw]format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),255,0)'[circle]")
                 filters.append(f"[main]subtitles='{rel_srt}':force_style='{style}'[v_sub]")
                 filters.append(f"[v_sub][circle]overlay=W-w-15:15[vout]")
@@ -548,3 +560,54 @@ class VideoEditor:
         except subprocess.CalledProcessError as e:
             print(f"[-] FFmpeg 错误:\n{e.stderr[-500:]}")
             return None
+
+    # ------------------------------------------------------------------ #
+    # Cover Generation: Horizontal & Vertical
+    # ------------------------------------------------------------------ #
+
+    def generate_covers(self, image_path: str, output_dir: str) -> dict:
+        """
+        Generates horizontal (16:9) and vertical (9:16) covers from a thumbnail.
+        Vertical cover uses a blurred version of the image as the background.
+        """
+        if not image_path or not os.path.exists(image_path):
+            print("[!] No thumbnail to generate covers from.")
+            return {}
+
+        results = {}
+        h_path = os.path.join(output_dir, "cover_horizontal.jpg")
+        v_path = os.path.join(output_dir, "cover_vertical.jpg")
+
+        print(f"[*] Generating Horizontal Cover (16:9)...")
+        # Horizontal: Fit into 1920x1080 with black padding if necessary
+        cmd_h = [
+            "ffmpeg", "-y", "-i", image_path,
+            "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
+            h_path
+        ]
+        
+        print(f"[*] Generating Vertical Cover (9:16) with Blur BG...")
+        # Vertical: Blur Background (scaled to fill 1080x1920) + Centered Original (scaled to fit width)
+        cmd_v = [
+            "ffmpeg", "-y", "-i", image_path,
+            "-vf", (
+                "split[bg_raw][fg_raw];"
+                "[bg_raw]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:20[bg];"
+                "[fg_raw]scale=1080:-1[fg];"
+                "[bg][fg]overlay=(W-w)/2:(H-h)/2"
+            ),
+            v_path
+        ]
+
+        try:
+            subprocess.run(cmd_h, check=True, capture_output=True)
+            results['horizontal'] = h_path
+            print(f"[+] Horizontal Cover: {h_path}")
+            
+            subprocess.run(cmd_v, check=True, capture_output=True)
+            results['vertical'] = v_path
+            print(f"[+] Vertical Cover: {v_path}")
+        except subprocess.CalledProcessError as e:
+            print(f"[-] FFmpeg Cover Error: {e.stderr.decode(errors='replace')}")
+
+        return results

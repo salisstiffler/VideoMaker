@@ -1,16 +1,21 @@
 import os
-import subprocess
 import re
 import time
 import shutil
-import tempfile
 from typing import Optional, Tuple
-
+import yt_dlp
 
 class VideoDownloader:
     def __init__(self, base_dir: str = "downloads"):
         self.base_dir = base_dir
         os.makedirs(self.base_dir, exist_ok=True)
+        # Align with latest desktop script: Use proxy = False
+        self.proxy = "http://127.0.0.1:7890"
+        self.use_proxy = False
+        self.cookies_file = "cookies.txt"
+        if not os.path.exists(self.cookies_file):
+            if os.path.exists("youtube_cookies.txt"):
+                self.cookies_file = "youtube_cookies.txt"
 
     def clean_filename(self, filename: str) -> str:
         """Windows-safe filename cleaning."""
@@ -24,211 +29,142 @@ class VideoDownloader:
                 return os.path.join(directory, f)
         return None
 
-    def _run_cmd(self, cmd: list, label: str) -> tuple[bool, str]:
-        """Run a subprocess command; return (success, stderr_snippet)."""
-        print(f"[*] {label}")
-        print(f"    CMD: {' '.join(cmd)}")
-        try:
-            result = subprocess.run(
-                cmd,
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=300,
-            )
-            return True, ""
-        except subprocess.CalledProcessError as e:
-            stderr = (e.stderr or "")[-600:]
-            print(f"[!] {label} — exit code {e.returncode}")
-            if stderr:
-                print(f"    STDERR: {stderr[-300:]}")
-            return False, stderr
-        except subprocess.TimeoutExpired:
-            print(f"[!] {label} — timed out after 300s")
-            return False, "timeout"
-        except FileNotFoundError:
-            print("[!] yt-dlp not found. Install: pip install -U yt-dlp")
-            return False, "not_found"
-        except Exception as e:
-            print(f"[!] {label} — unexpected: {e}")
-            return False, str(e)
-
     def get_channel_videos_last_week(self, channel_url: str) -> list[str]:
-        """
-        Scrapes a channel URL and returns a list of video URLs uploaded in the last week.
-        """
-        print(f"[*] Searching for recent videos in channel: {channel_url}")
+        """Scrapes a channel URL and returns a list of video URLs from the last week."""
+        print(f"[*] Searching for recent videos in channel (using API): {channel_url}")
         
-        # Use yt-dlp to get URLs of videos from the last 7 days
-        # --dateafter now-7days : filter by date
-        # --get-id or --get-url : just get the metadata
-        # --flat-playlist : don't extract individual video info (faster)
-        cmd = [
-            "yt-dlp",
-            "--no-check-certificate",
-            "--flat-playlist",
-            "--get-id",
-            "--dateafter", "now-7days",
-            channel_url
-        ]
+        opts = {
+            'extract_flat': 'in_playlist',
+            'playlist_items': '1-20',
+            'quiet': True,
+        }
         
+        # Don't use proxy for channel search if use_proxy is False
+        if self.use_proxy and self.proxy:
+            opts['proxy'] = self.proxy
+        if os.path.exists(self.cookies_file):
+            opts['cookiefile'] = self.cookies_file
+
+        urls = []
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=60
-            )
-            if result.returncode == 0:
-                video_ids = result.stdout.strip().split('\n')
-                urls = [f"https://www.youtube.com/watch?v={vid.strip()}" for vid in video_ids if vid.strip()]
-                print(f"[+] Found {len(urls)} videos from the last 7 days.")
-                return urls
-            else:
-                print(f"[!] Failed to scrape channel: {result.stderr}")
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                result = ydl.extract_info(channel_url, download=False)
+                if 'entries' in result:
+                    for entry in result['entries']:
+                        url = entry.get('url') or f"https://www.youtube.com/watch?v={entry.get('id')}"
+                        urls.append(url)
+            print(f"[+] Found {len(urls)} videos in channel.")
         except Exception as e:
             print(f"[!] Error scraping channel: {e}")
             
-        return []
+        return urls
 
     def get_channel_video_ids(self, channel_url: str, limit: int = 5) -> list[str]:
-        """
-        Quickly gets the last 'limit' video IDs from a channel.
-        """
-        print(f"[*] Checking channel for latest {limit} videos: {channel_url}")
-        cmd = [
-            "yt-dlp",
-            "--no-check-certificate",
-            "--flat-playlist",
-            "--get-id",
-            "--playlist-end", str(limit),
-            channel_url
-        ]
+        """Quickly gets the last 'limit' video IDs from a channel."""
+        print(f"[*] Checking channel IDs: {channel_url}")
+        opts = {
+            'extract_flat': 'in_playlist',
+            'playlist_items': f'1-{limit}',
+            'quiet': True,
+        }
+        if self.use_proxy and self.proxy:
+            opts['proxy'] = self.proxy
+        if os.path.exists(self.cookies_file):
+            opts['cookiefile'] = self.cookies_file
+
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
-            if result.returncode == 0:
-                return [vid.strip() for vid in result.stdout.strip().split('\n') if vid.strip()]
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                result = ydl.extract_info(channel_url, download=False)
+                if 'entries' in result:
+                    return [entry.get('id') for entry in result['entries'] if entry.get('id')]
         except Exception as e:
             print(f"[!] Error checking channel IDs: {e}")
         return []
 
-    def download_video(self, url: str) -> Tuple[Optional[str], Optional[str]]:
-        # 1. URL Cleanup — strip tracking parameters
-        url = url.split('&')[0]
-        print(f"\n[*] Downloading: {url}")
+    def build_ydl_opts(self, video_dir: str, use_proxy: bool = False, client: str = "android") -> dict:
+        """Constructs yt-dlp options based on working desktop script."""
+        opts = {
+            'outtmpl': f'{video_dir}/%(title)s.%(ext)s',
+            # 🚀 强制优先 H.264 (高码率/大文件，与 IDM 一致)，次选 VP9，最后才选 AV1
+            'format': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
+            'merge_output_format': 'mp4',
+            'cookies': self.cookies_file,
+            'writethumbnail': True,  # 🚀 新增：获取封面
+            'postprocessors': [
+                {'key': 'FFmpegExtractAudio', 'preferredcodec': 'm4a', 'preferredquality': '192'},
+                {'key': 'FFmpegThumbnailsConvertor', 'format': 'jpg', 'when': 'before_dl'}, # 🚀 将封面转为 jpg
+            ],
+            'extractor_args': {
+                'youtube': {
+                    'player_client': [client]
+                }
+            },
+            'retries': 10,
+            'fragment_retries': 10,
+            'ignoreerrors': True,
+            'quiet': False,
+            'no_warnings': False,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+        }
+        
+        if use_proxy and self.proxy:
+            opts['proxy'] = self.proxy
+        else:
+            # 强制不使用任何代理 (防止读取系统环境变量中的代理)
+            opts['proxy'] = ""
+            
+        return opts
 
-        video_id = str(int(time.time()))
+    def download_video(self, url: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """Returns (video_path, title, thumbnail_path)"""
+        url = url.split('&')[0]
+        
+        # 🚀 优化：从 URL 中提取唯一 ID，防止重复下载
+        video_id = "unknown"
+        if "youtube.com" in url or "youtu.be" in url:
+            match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
+            if match: video_id = match.group(1)
+        elif "bilibili.com" in url:
+            match = re.search(r"(BV[0-9A-Za-z]+)", url)
+            if match: video_id = match.group(1)
+        
+        # 如果无法提取 ID，则降级使用缓存的哈希值
+        if video_id == "unknown":
+            import hashlib
+            video_id = hashlib.md5(url.encode()).hexdigest()[:12]
+
+        print(f"\n[*] New Download Request (Unique ID: {video_id}): {url}")
+
         video_dir = os.path.abspath(os.path.join(self.base_dir, video_id))
         os.makedirs(video_dir, exist_ok=True)
 
-        out_template = os.path.join(video_dir, "%(title)s.%(ext)s")
-
-        # ------------------------------------------------------------------ #
-        # Base options shared across all strategies
-        # --no-check-certificate : skip SSL verification
-        # --merge-output-format mp4 : always produce .mp4
-        # --format : prefer h264 (most compatible) then best
-        # --extractor-args : use ios client — most reliable in 2024-2025
-        # --no-playlist : never accidentally grab a whole playlist
-        # ------------------------------------------------------------------ #
-        base_opts = [
-            "yt-dlp",
-            "--no-check-certificate",
-            "--no-warnings",
-            "--no-playlist",
-            "--merge-output-format", "mp4",
-            # General fallback: Prefer 1080p, but allow 720p or lower if needed.
-            # Don't strictly force avc1 in the selector, just sort it higher.
-            "--format", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-            "--format-sort", "res:1080,vcodec:avc1,fps,size",
-            "--socket-timeout", "30",
-            # Download video in 8 parallel fragments — much faster on fast connections
-            "--concurrent-fragments", "8",
-            "-o", out_template,
+        # Implementation of the user's successful sequential strategies
+        # 策略重调：优先使用 tv_embedded 和 web_safari，目前它们最容易获取 1080p
+        strategies = [
+            ("tv_embedded", False), # 🚀 尝试 1: TV 客户端 (最容易无 PO Token 获取高分辨率)
+            ("web_safari", False),  # 🚀 尝试 2: 网页 Safari (配合 Cookies 成功率高)
+            ("android", False),     # 🚀 尝试 3: Android 直连
+            ("android", True),      # 🚀 尝试 4: Android + 代理 (最后备份)
         ]
 
-        # ------------------------------------------------------------------ #
-        # STRATEGY 1 — Manual cookie file (most reliable when present)
-        # Export cookies with "Get cookies.txt LOCALLY" Chrome extension,
-        # save as youtube_cookies.txt next to this script.
-        # ------------------------------------------------------------------ #
-        if os.path.exists(cookie_file):
-            # Strategy 1 with cookies: Allow more formats (avc1 preferred but not strictly required)
-            cookie_cmd = [
-                "yt-dlp",
-                "--no-check-certificate", "--no-warnings", "--no-playlist",
-                "--merge-output-format", "mp4",
-                # Best video+audio, prefer 1080p, fallback to 720p or any.
-                "--format", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-                "--format-sort", "res:1080,vcodec:avc1,fps,size",
-                "--concurrent-fragments", "8",
-                "--socket-timeout", "30",
-                "--cookies", cookie_file,
-                "-o", out_template,
-                url,
-            ]
-            ok, _ = self._run_cmd(cookie_cmd, "Strategy 1: manual cookies file")
-            if ok:
-                mp4 = self._find_mp4(video_dir)
-                if mp4:
-                    title = self.clean_filename(os.path.splitext(os.path.basename(mp4))[0])
-                    return mp4, title
-
-        # ------------------------------------------------------------------ #
-        # STRATEGY 2 — Live browser session (Chrome → Edge → Firefox)
-        # Works while the browser is running and user is logged in.
-        # ------------------------------------------------------------------ #
-        # Fast-fail keywords: if we see these errors, browser cookies won't work —
-        # skip remaining browser strategies immediately
-        BROWSER_FATAL_ERRORS = ("could not copy", "dpapi", "locked", "could not find")
-
-        for browser in ["chrome", "edge", "firefox"]:
-            cmd = base_opts + ["--cookies-from-browser", browser, url]
-            ok, stderr = self._run_cmd(cmd, f"Strategy 2: live {browser} session")
-            if ok:
-                mp4 = self._find_mp4(video_dir)
-                if mp4:
-                    title = self.clean_filename(os.path.splitext(os.path.basename(mp4))[0])
-                    return mp4, title
-            # If it's a known-bad cookie error, don't bother with other browsers
-            if any(kw in stderr.lower() for kw in BROWSER_FATAL_ERRORS):
-                print(f"    [!] Browser cookie extraction not available — skipping remaining browser strategies")
-                break
-
-        # ------------------------------------------------------------------ #
-        # STRATEGY 3 — No cookies, fallback player clients
-        # Try tv_embedded and mweb clients as last resort.
-        # ------------------------------------------------------------------ #
-        for client in ["android_vr", "tv_embedded", "mweb"]:
-            cmd = [
-                "yt-dlp",
-                "--no-check-certificate",
-                "--no-playlist",
-                "--merge-output-format", "mp4",
-                # android_vr only exposes combined streams (360p/720p)
-                # Use bestvideo+bestaudio to get the highest available for this client
-                "--format", "bestvideo+bestaudio/best",
-                "--format-sort", "res,fps",
-                "--concurrent-fragments", "8",
-                "--extractor-args", f"youtube:player_client={client}",
-                "--socket-timeout", "30",
-                "-o", out_template,
-                url,
-            ]
-            ok, _ = self._run_cmd(cmd, f"Strategy 3: no-cookie fallback (client={client})")
-            if ok:
-                mp4 = self._find_mp4(video_dir)
-                if mp4:
-                    title = self.clean_filename(os.path.splitext(os.path.basename(mp4))[0])
-                    return mp4, title
+        for i, (client, use_proxy) in enumerate(strategies):
+            print(f"\n🚀 Attempt {i+1}: client={client}, use_proxy={use_proxy}")
+            try:
+                ydl_opts = self.build_ydl_opts(video_dir, use_proxy=use_proxy, client=client)
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    error_code = ydl.download([url])
+                    if error_code == 0:
+                        mp4 = self._find_mp4(video_dir)
+                        thb = self._find_thumbnail(video_dir)
+                        if mp4:
+                            title = self.clean_filename(os.path.splitext(os.path.basename(mp4))[0])
+                            print(f"[+] Download Success: {title} (Strategy: {client})")
+                            return mp4, title, thb
+            except Exception as e:
+                print(f"❌ Attempt {i+1} failed: {e}")
 
         print("\n[-] All download strategies failed for this URL.")
-        print("    Tips:")
-        print("    1. Update yt-dlp:  pip install -U yt-dlp")
-        print("    2. Export cookies from your browser and save as youtube_cookies.txt")
-        print("    3. Make sure Chrome/Edge is open and logged in for Strategy 2")
-        return None, None
+        return None, None, None
