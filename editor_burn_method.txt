@@ -1,0 +1,48 @@
+    def burn_subtitles(self, video_path: str, srt_path: str,
+                       margin_v: int = 35, logo_path: str = None,
+                       dubbing_path: str = None, inst_path: str = None,
+                       output_dir: str = "output") -> str:
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        video_output_dir = os.path.abspath(os.path.join(output_dir, base_name))
+        out_path = os.path.join(video_output_dir, f"{base_name}_final.mp4")
+
+        style = f"FontSize=20,BorderStyle=3,Outline=1,OutlineColour=&H80000000,MarginV={margin_v},Alignment=2"
+        vcodec = ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "23"] if self._has_nvenc() else ["-c:v", "libx264", "-preset", "fast", "-crf", "23"]
+
+        inputs = ["-i", video_path]
+        cur_v, cur_a = "[0:v]", "[0:a]"
+        filter_parts = []
+
+        if srt_path:
+            rel_srt = os.path.relpath(srt_path).replace("\\", "/")
+            filter_parts.append(f"{cur_v}subtitles='{rel_srt}':force_style='{style}'[v_sub]")
+            cur_v = "[v_sub]"
+
+        if logo_path and os.path.exists(logo_path):
+            l_idx = len(inputs)
+            inputs += ["-i", logo_path]
+            filter_parts.append(f"[{l_idx}:v]crop='min(iw,ih)':'min(iw,ih)',scale='ih/8':'ih/8',format=rgba,"
+                               f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),255,0)'[lready];"
+                               f"{cur_v}[lready]overlay=W-w-20:20[v_logo]")
+            cur_v = "[v_logo]"
+
+        if dubbing_path and os.path.exists(dubbing_path):
+            d_idx = len(inputs)
+            inputs += ["-i", dubbing_path]
+            if inst_path and os.path.exists(inst_path):
+                i_idx = len(inputs)
+                inputs += ["-i", inst_path]
+                filter_parts.append(f"[{i_idx}:a][{d_idx}:a]sidechaincompress=threshold=0.1:ratio=5:release=500[bg_d]")
+                filter_parts.append(f"[bg_d][{d_idx}:a]amix=inputs=2:duration=first:dropout_transition=2[a_fin]")
+            else:
+                filter_parts.append(f"[{d_idx}:a]copy[a_fin]")
+            cur_a = "[a_fin]"
+
+        cmd = ["ffmpeg", "-y"] + inputs
+        if filter_parts:
+            cmd += ["-filter_complex", ";".join(filter_parts), "-map", cur_v, "-map", cur_a]
+        else:
+            cmd += ["-c:v", "copy", "-c:a", "copy"]
+        cmd += vcodec + ["-c:a", "aac", "-b:a", "192k", out_path]
+        subprocess.run(cmd, check=True, capture_output=True)
+        return out_path

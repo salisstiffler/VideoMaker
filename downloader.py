@@ -29,6 +29,15 @@ class VideoDownloader:
                 return os.path.join(directory, f)
         return None
 
+    def _find_thumbnail(self, directory: str) -> Optional[str]:
+        """Find the first image file in a directory."""
+        if not os.path.exists(directory):
+            return None
+        for f in os.listdir(directory):
+            if f.lower().endswith((".jpg", ".png", ".webp", ".jpeg")):
+                return os.path.join(directory, f)
+        return None
+
     def get_channel_videos_last_week(self, channel_url: str) -> list[str]:
         """Scrapes a channel URL and returns a list of video URLs from the last week."""
         print(f"[*] Searching for recent videos in channel (using API): {channel_url}")
