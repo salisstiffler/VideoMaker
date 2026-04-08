@@ -1,11 +1,6 @@
 """
 editor.py  —  VideoCapter 音视频处理模块 (最终生产版)
 =========================================
-核心逻辑：
-  - 借鉴 VideoLingo：引入“分组生成”技术，解决 F5-TTS 吞字和不自然问题。
-  - WhisperX 精准对齐。
-  - 侧链压缩自动避让背景音。
-  - 支持专业级圆形 Logo 叠加。
 """
 
 import os
@@ -63,10 +58,20 @@ class VideoEditor:
         except: return False
 
     def generate_subtitles(self, video_path: str, output_dir: str = "output") -> tuple:
+        import json
         base_name = os.path.splitext(os.path.basename(video_path))[0]
         video_output_dir = os.path.abspath(os.path.join(output_dir, base_name))
         os.makedirs(video_output_dir, exist_ok=True)
+        
         srt_path = os.path.join(video_output_dir, f"{base_name}_bilingual.srt")
+        segments_cache = os.path.join(video_output_dir, f"{base_name}_segments.json")
+        
+        if os.path.exists(segments_cache):
+            print(f"[+] 发现 WhisperX 缓存片段，跳过转录: {segments_cache}")
+            with open(segments_cache, "r", encoding="utf-8") as f:
+                raw_segments = json.load(f)
+            return srt_path, raw_segments, []
+
         print(f"[*] [WhisperX] 正在处理: {os.path.basename(video_path)}")
         model = whisperx.load_model(self._model_size, self.device, compute_type=self.compute_type)
         audio = whisperx.load_audio(video_path)
@@ -77,6 +82,11 @@ class VideoEditor:
         for seg in result["segments"]:
             if "start" in seg and "end" in seg:
                 raw_segments.append((seg["start"], seg["end"], seg["text"].strip()))
+        
+        # 缓存片段
+        with open(segments_cache, "w", encoding="utf-8") as f:
+            json.dump(raw_segments, f, ensure_ascii=False, indent=2)
+            
         return srt_path, raw_segments, []
 
     def separate_audio(self, video_path: str, output_dir: str = "output") -> tuple:
@@ -158,70 +168,148 @@ class VideoEditor:
 
     def burn_subtitles(self, video_path: str, srt_path: str,
                        margin_v: int = 35, logo_path: str = None,
+                       logo_pos: str = "top-right", logo_margin: tuple = (20, 20),
                        dubbing_path: str = None, inst_path: str = None,
-                       output_dir: str = "output") -> str:
+                       output_dir: str = "output",
+                       sub_style: dict = None) -> str:
+        import shutil
         base_name = os.path.splitext(os.path.basename(video_path))[0]
         video_output_dir = os.path.abspath(os.path.join(output_dir, base_name))
+        os.makedirs(video_output_dir, exist_ok=True)
         out_path = os.path.join(video_output_dir, f"{base_name}_final.mp4")
-        style = f"FontSize=20,BorderStyle=3,Outline=1,OutlineColour=&H80000000,MarginV={margin_v},Alignment=2"
-        vcodec = ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "23"] if self._has_nvenc() else ["-c:v", "libx264", "-preset", "fast", "-crf", "23"]
-
-        # 构建输入列表并记录各路流的索引
-        inputs = ["-i", video_path]
-        vid_idx = 0
-        aud_idx = 0
         
-        logo_idx = -1
-        if logo_path and os.path.exists(logo_path):
-            logo_idx = len(inputs) // 2
-            inputs += ["-i", logo_path]
-            
-        dub_idx = -1
-        if dubbing_path and os.path.exists(dubbing_path):
-            dub_idx = len(inputs) // 2
-            inputs += ["-i", dubbing_path]
-            
-        inst_idx = -1
-        if inst_path and os.path.exists(inst_path):
-            inst_idx = len(inputs) // 2
-            inputs += ["-i", inst_path]
+        if os.path.exists(out_path):
+            print(f"[+] 发现已合成的视频，跳过渲染: {out_path}")
+            return out_path
+        
+        # 1. 资源就位 (全部拷贝到根目录以防路径问题)
+        tmp_files = []
+        target_srt = "r_sub.srt" if srt_path and os.path.exists(srt_path) else None
+        if target_srt: shutil.copy(srt_path, target_srt); tmp_files.append(target_srt)
 
+        target_logo = f"r_logo{os.path.splitext(logo_path)[1]}" if logo_path and os.path.exists(logo_path) else None
+        if target_logo: shutil.copy(logo_path, target_logo); tmp_files.append(target_logo)
+
+        target_dub = "r_dub.wav" if dubbing_path and os.path.exists(dubbing_path) else None
+        if target_dub: shutil.copy(dubbing_path, target_dub); tmp_files.append(target_dub)
+            
+        target_inst = "r_inst.wav" if inst_path and os.path.exists(inst_path) else None
+        if target_inst: shutil.copy(inst_path, target_inst); tmp_files.append(target_inst)
+
+        # 2. 构造样式参数 (更严谨的引号包裹)
+        style_dict = {"FontSize": 24, "BackColour": "&H80000000", "BorderStyle": 4, "Outline": 0}
+        if sub_style: style_dict.update(sub_style)
+        s = style_dict
+        # 核心：将所有样式放在单引号内
+        style_str = f"FontSize={s['FontSize']},BorderStyle={s['BorderStyle']},BackColour={s['BackColour']},Outline={s['Outline']},MarginV={margin_v},Alignment=2"
+
+        # 3. 构造滤镜
         filter_parts = []
-        cur_v = f"[{vid_idx}:v]"
-        cur_a = f"[{vid_idx}:a]"
-
-        # 1. 字幕
-        if srt_path:
-            rel_srt = os.path.relpath(srt_path).replace("\\", "/")
-            filter_parts.append(f"{cur_v}subtitles='{rel_srt}':force_style='{style}'[v_sub]")
+        cur_v = "[0:v]"
+        
+        # 字幕：注意 filename 的路径在脚本文件中不需要额外转义冒号
+        if target_srt:
+            filter_parts.append(f"{cur_v}subtitles=filename='{target_srt}':force_style='{style_str}'[v_sub]")
             cur_v = "[v_sub]"
 
-        # 2. Logo
-        if logo_idx != -1:
-            filter_parts.append(f"[{logo_idx}:v]crop='min(iw,ih)':'min(iw,ih)',scale='ih/8':'ih/8',format=rgba,"
-                               f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),255,0)'[lready];"
-                               f"{cur_v}[lready]overlay=W-w-20:20[v_final]")
+        # Logo：圆形裁剪 + 白色边框 (工业级稳健方案)
+        if target_logo:
+            mx, my = logo_margin
+            pos_map = {
+                "top-left": f"{mx}:{my}",
+                "top-right": f"W-w-{mx}:{my}",
+                "bottom-left": f"{mx}:H-h-{my}",
+                "bottom-right": f"W-w-{mx}:H-h-{my}"
+            }
+            overlay_coord = pos_map.get(logo_pos, f"W-w-{mx}:{my}")
+            
+            # 滤镜链：
+            # 1. 裁剪为正方形 -> 2. 缩放 -> 3. 创建圆形遮罩 -> 4. 应用遮罩 -> 5. 加上白色圆形外框
+            # 我们通过覆盖两层来实现边框：底层是稍微大一点的白色圆，顶层是 Logo 圆
+            logo_size = "ih/8"
+            filter_parts.append(
+                f"[1:v]crop='min(iw,ih)':'min(iw,ih)',scale={logo_size}:{logo_size},format=rgba,"
+                f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),255,0)'[logo_circ]"
+            )
+            # 创建一个纯白色的圆形背景（比 Logo 大 4 像素作为边框）
+            filter_parts.append(
+                f"color=c=white:s=100x100,scale={logo_size}+4:{logo_size}+4,format=rgba,"
+                f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),255,0)'[white_bg]"
+            )
+            # 叠加：先贴白圆，再贴 Logo
+            filter_parts.append(f"{cur_v}[white_bg]overlay={overlay_coord}-2:2[v_with_bg]")
+            filter_parts.append(f"[v_with_bg][logo_circ]overlay={overlay_coord}[v_final]")
             cur_v = "[v_final]"
 
-        # 3. 音频
-        if dub_idx != -1:
-            if inst_idx != -1:
-                # 侧链混音: 背景音在配音出现时降低
+        # 音频
+        cur_a = "[0:a]"
+        if target_dub:
+            dub_idx = 2 if target_logo else 1
+            if target_inst:
+                inst_idx = 3 if target_logo else 2
                 filter_parts.append(f"[{inst_idx}:a][{dub_idx}:a]sidechaincompress=threshold=0.1:ratio=5:release=500[bg_d]")
                 filter_parts.append(f"[bg_d][{dub_idx}:a]amix=inputs=2:duration=first:dropout_transition=2[a_final]")
             else:
                 filter_parts.append(f"[{dub_idx}:a]copy[a_final]")
             cur_a = "[a_final]"
 
-        cmd = ["ffmpeg", "-y"] + inputs
+        # 4. 写入脚本
+        script_file = "r_filter.txt"
+        with open(script_file, "w", encoding="utf-8") as f:
+            f.write(";\n".join(filter_parts))
+        tmp_files.append(script_file)
+
+        # 5. 命令组装
+        inputs = ["-i", video_path]
+        if target_logo: inputs += ["-i", target_logo]
+        if target_dub:  inputs += ["-i", target_dub]
+        if target_inst: inputs += ["-i", target_inst]
+
+        # 解决 EINVAL: 检测并只映射滤镜图内部实际存在的输出流标签，不要映射初始占位符 [0:v] / [0:a]
+        map_v = cur_v if cur_v != "[0:v]" else "0:v"
+        map_a = cur_a if cur_a != "[0:a]" else "0:a"
+
+        # 显卡加速配置
+        vcodec = ["-c:v", "h264_nvenc", "-preset", "p4", "-cq", "23"] if self._has_nvenc() else ["-c:v", "libx264", "-preset", "fast", "-crf", "23"]
+        
+        cmd = ["ffmpeg", "-y", "-hide_banner"] + inputs
+        
         if filter_parts:
-            cmd += ["-filter_complex", ";".join(filter_parts), "-map", cur_v, "-map", cur_a]
-        else:
-            cmd += ["-map", "0:v", "-map", "0:a", "-c:v", "copy", "-c:a", "copy"]
+            cmd += ["-filter_complex_script", script_file]
             
-        cmd += vcodec + ["-c:a", "aac", "-b:a", "192k", out_path]
-        subprocess.run(cmd, check=True, capture_output=True)
+        cmd += [
+            "-map", map_v, "-map", map_a,
+            "-pix_fmt", "yuv420p" # 强制输出标准像素格式
+        ] + vcodec + ["-c:a", "aac", "-b:a", "192k", out_path]
+
+        print(f"[*] 执行最终命令:\n{' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
+        
+        # 6. 异常处理与降级
+        if result.returncode != 0:
+            print(f"[-] FFmpeg 严重错误日志:\n{result.stderr}")
+            with open("FFMPEG_CRASH_REPORT.log", "w", encoding="utf-8") as f_err:
+                f_err.write(f"COMMAND:\n{' '.join(cmd)}\n\nERROR:\n{result.stderr}")
+            
+            if "nvenc" in result.stderr.lower():
+                print("[!] 硬件编码失败，尝试 CPU 重新合成...")
+                cmd_cpu = [c.replace("h264_nvenc", "libx264").replace("p4", "medium").replace("-cq", "-crf") for c in cmd]
+                result = subprocess.run(cmd_cpu, capture_output=True, text=True, encoding="utf-8", errors="ignore")
+                if result.returncode == 0: 
+                    self._cleanup(tmp_files)
+                    return out_path
+
+            self._cleanup(tmp_files)
+            raise Exception(f"FFmpeg 合成失败 (Exit {result.returncode})，错误报告已生成至 FFMPEG_CRASH_REPORT.log")
+
+        self._cleanup(tmp_files)
         return out_path
+
+    def _cleanup(self, files):
+        for f in files:
+            if os.path.exists(f): 
+                try: os.remove(f)
+                except: pass
 
     def generate_covers(self, image_path: str, output_dir: str) -> dict:
         return {}

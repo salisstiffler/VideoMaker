@@ -1,0 +1,15 @@
+streamlit
+faster-whisper
+yt-dlp
+pydub
+translators
+scipy
+torch
+torchvision
+torchaudio
+audio-separator[gpu]
+pyyaml
+pandas
+numpy
+tqdm
+requests

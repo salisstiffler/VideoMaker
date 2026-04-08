@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  videocapter:
+    build: .
+    container_name: videocapter-web
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./output:/app/output
+      - ./uploads:/app/uploads
+      - ./.cache:/root/.cache  # 模型缓存挂载
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped

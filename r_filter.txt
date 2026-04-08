@@ -1,0 +1,7 @@
+[0:v]subtitles=filename='r_sub.srt':force_style='FontSize=12,BorderStyle=4,BackColour=&H7F000000,Outline=0,MarginV=24,Alignment=2'[v_sub];
+[1:v]crop='min(iw,ih)':'min(iw,ih)',scale=ih/8:ih/8,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),255,0)'[logo_circ];
+color=c=white:s=100x100,scale=ih/8+4:ih/8+4,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),255,0)'[white_bg];
+[v_sub][white_bg]overlay=W-w-20:20-2:2[v_with_bg];
+[v_with_bg][logo_circ]overlay=W-w-20:20[v_final];
+[3:a][2:a]sidechaincompress=threshold=0.1:ratio=5:release=500[bg_d];
+[bg_d][2:a]amix=inputs=2:duration=first:dropout_transition=2[a_final]

@@ -5,7 +5,7 @@ from openai import OpenAI
 # 默认配置本地 LM Studio
 LM_STUDIO_BASE_URL = "http://localhost:1234/v1"
 LM_STUDIO_API_KEY = "lm-studio"
-MODEL_NAME = "qwen2.5-7b-instruct" # 或其他你部署好的模型名叫什么填什么
+MODEL_NAME = "qwen3.5-9b" # 或其他你部署好的模型名叫什么填什么
 
 def get_client():
     """获取 OpenAI 客户端对象，指向本地 LM Studio"""
@@ -35,6 +35,7 @@ def translate_with_timing(text: str, duration: float, chars_per_sec: float = 3.8
         "你是一个顶级的影视翻译官和配音导演。\n"
         "你的目标是将英文台词翻译成中文，必须让配音员在指定时间内读完，绝对不能太长！\n"
         "如果原文很长但给的时间很少，你必须进行大幅度删减，只保留核心意思。\n"
+        "最重要的一点就是输出的文字要顺畅。\n"
     )
 
     brevity_note = ""

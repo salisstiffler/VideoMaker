@@ -99,7 +99,21 @@ def produce_final_video(url_or_path, ref_voice=None, logo_path="avrtar.jpg", out
     duration_total = time.time() - start_total
     print(f"\n[✅] 全片生产完成！")
     print(f"[⏱️] 总执行时长: {duration_total/60:.1f} 分钟")
-    
+
+    # 10. 片头片尾拼接
+    try:
+        from intro_outro import concat_with_intro_outro
+        final_out_with_io = os.path.join(work_dir, f"{base_name}_with_intro_outro.mp4")
+        final_output = concat_with_intro_outro(
+            main_video=final_output,
+            output_path=final_out_with_io,
+            intro_duration=4.0,
+            outro_duration=5.0,
+        )
+        print(f"[🎥] 片头片尾已添加: {final_output}")
+    except Exception as e:
+        print(f"[!] 片头片尾添加失败（跳过）: {e}")
+
     final_dir = os.path.abspath("final_outputs")
     os.makedirs(final_dir, exist_ok=True)
     final_dest = os.path.join(final_dir, f"{base_name}_final_produced.mp4")

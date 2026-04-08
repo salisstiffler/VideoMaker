@@ -1,0 +1,42 @@
+CMD:
+ffmpeg -y -i D:\videoCapter\uploads\Paper Rex vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1.mp4 -i D:\videoCapter\avrtar.jpg -filter_complex_script tmp_render_filter.txt -map [v_final] -map [0:a] -c:v h264_nvenc -preset p4 -cq 23 -c:a aac -b:a 192k D:\videoCapter\output\Paper Rex vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1\Paper Rex vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_final.mp4
+
+ERROR:
+ffmpeg version 8.1-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers
+  built with gcc 15.2.0 (Rev11, Built by MSYS2 project)
+  configuration: --enable-gpl --enable-version3 --enable-shared --disable-w32threads --disable-autodetect --enable-cairo --enable-fontconfig --enable-iconv --enable-gnutls --enable-lcms2 --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma --enable-libsnappy --enable-zlib --enable-librist --enable-libsrt --enable-libssh --enable-libzmq --enable-avisynth --enable-libbluray --enable-libcaca --enable-libdvdnav --enable-libdvdread --enable-sdl2 --enable-libaribb24 --enable-libaribcaption --enable-libdav1d --enable-libdavs2 --enable-libopenjpeg --enable-libquirc --enable-libuavs3d --enable-libxevd --enable-libzvbi --enable-liboapv --enable-libqrencode --enable-librav1e --enable-libsvtav1 --enable-libvvenc --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxavs2 --enable-libxeve --enable-libxvid --enable-libaom --enable-libjxl --enable-libsvtjpegxs --enable-libvpx --enable-mediafoundation --enable-libass --enable-frei0r --enable-libfreetype --enable-libfribidi --enable-libharfbuzz --enable-liblensfun --enable-libvidstab --enable-libvmaf --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-libshaderc --enable-vulkan --enable-libplacebo --enable-opencl --enable-libcdio --enable-openal --enable-libgme --enable-libmodplug --enable-libopenmpt --enable-libopencore-amrwb --enable-libmp3lame --enable-libshine --enable-libtheora --enable-libtwolame --enable-libvo-amrwbenc --enable-libcodec2 --enable-libilbc --enable-libgsm --enable-liblc3 --enable-libopencore-amrnb --enable-libopus --enable-libspeex --enable-libvorbis --enable-ladspa --enable-libbs2b --enable-libflite --enable-libmysofa --enable-librubberband --enable-libsoxr --enable-chromaprint --enable-whisper
+  libavutil      60. 26.100 / 60. 26.100
+  libavcodec     62. 28.100 / 62. 28.100
+  libavformat    62. 12.100 / 62. 12.100
+  libavdevice    62.  3.100 / 62.  3.100
+  libavfilter    11. 14.100 / 11. 14.100
+  libswscale      9.  5.100 /  9.  5.100
+  libswresample   6.  3.100 /  6.  3.100
+-filter_complex_script is deprecated, use -/filter_complex tmp_render_filter.txt instead
+[Parsed_subtitles_0 @ 000001a943e69240] libass API version: 0x1704000
+[Parsed_subtitles_0 @ 000001a943e69240] libass source: commit: 0.17.4-21-gfadc390583f24eb5cf98f16925fd3adee50bca88
+[Parsed_subtitles_0 @ 000001a943e69240] Shaper: FriBidi 1.0.16 (SIMPLE) HarfBuzz-ng 13.1.1 (COMPLEX)
+[Parsed_subtitles_0 @ 000001a943e69240] Using font provider directwrite (with GDI)
+[in#0 @ 000001a9443efd40] st: 1 edit list: 1 Missing key frame while searching for timestamp: 0
+[in#0 @ 000001a9443efd40] st: 1 edit list 1 Cannot find an index entry before timestamp: 0.
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'D:\videoCapter\uploads\Paper Rex vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 1
+    compatible_brands: isomiso2avc1mp41
+    creation_time   : 2026-04-04T22:18:18.000000Z
+  Duration: 00:32:49.28, start: 0.000000, bitrate: 165 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 4547 kb/s, 60 fps, 60 tbr, 15360 tbn (default)
+    Metadata:
+      creation_time   : 2026-04-04T22:18:18.000000Z
+      handler_name    : ISO Media file produced by Google Inc.
+  Stream #0:1[0x2](eng): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 128 kb/s (default)
+    Metadata:
+      creation_time   : 2026-04-04T21:05:10.000000Z
+      handler_name    : ISO Media file produced by Google Inc.
+Input #1, image2, from 'D:\videoCapter\avrtar.jpg':
+  Duration: 00:00:00.04, start: 0.000000, bitrate: 4657 kb/s
+  Stream #1:0: Video: mjpeg (Baseline), yuvj420p(pc, bt470bg/unknown/unknown), 638x640 [SAR 1:1 DAR 319:320], 25 fps, 25 tbr, 25 tbn
+[out#0/mp4 @ 000001a9441bae00] Output with label '0:a' does not exist in any defined filter graph, or was already used elsewhere.
+Error opening output file D:\videoCapter\output\Paper Rex vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1\Paper Rex vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_final.mp4.
+Error opening output files: Invalid argument
