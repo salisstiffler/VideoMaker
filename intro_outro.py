@@ -279,7 +279,7 @@ def generate_outro(output_path: str, width: int = 1920, height: int = 1080,
     
     logo_filter = ""
     if logo:
-        logo_size = height // 5
+        logo_size = height // 20
         inputs.extend(["-i", logo])
         logo_filter = (
             f"[1:v]scale={logo_size}:{logo_size},format=rgba,"

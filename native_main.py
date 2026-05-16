@@ -4,6 +4,8 @@ import argparse
 import time
 from editor import VideoEditor
 from translator_timing import batch_translate_with_context
+from cover_generator import generate_covers
+from upload_utils import auto_upload
 
 # ── 片头片尾配置 ──────────────────────────────────────────────────────────────
 INTRO_OUTRO_CONFIG = {
@@ -24,7 +26,7 @@ def find_default_voice():
         return p
     return None
 
-def run_native_pipeline(video_path, ref_voice=None, output_dir="output", logo_path=None, margin_v=20, sub_mode="双语", use_dubbing=True, logo_pos="top-right", logo_margin=(20, 20), sub_style=None, use_io=True, io_text=None, intro_dur=4.0, outro_dur=5.0):
+def run_native_pipeline(video_path, ref_voice=None, output_dir="output", logo_path=None, margin_v=20, sub_mode="双语", use_dubbing=True, logo_pos="top-right", logo_margin=(20, 20), sub_style=None, use_io=True, io_text=None, intro_dur=4.0, outro_dur=5.0, upload=True):
     """
     全链路原生翻译配音生产流程 (进度汇报版)
     使用 yield 返回进度消息
@@ -46,7 +48,7 @@ def run_native_pipeline(video_path, ref_voice=None, output_dir="output", logo_pa
     yield f"🚀 开始处理项目: {base_name}"
 
     # 1. 初始化
-    yield "⚙️ 正在初始化 AI 引擎 (Faster-Whisper / F5-TTS)..."
+    yield "⚙️ 正在初始化 AI 引擎 (Faster-Whisper / Fun-CosyVoice3)..."
     editor = VideoEditor(model_size="base")
 
     # 2. UVR 背景音分离
@@ -60,43 +62,106 @@ def run_native_pipeline(video_path, ref_voice=None, output_dir="output", logo_pa
 
     # 3. 语音转录
     yield "📝 步骤 2/5: 正在提取视频语音并生成时间戳 (WhisperX)..."
-    _, segments, _ = editor.generate_subtitles(video_path, output_dir=output_dir)
-    if not segments:
-        yield "[-] 错误: 未能在视频中检测到有效对白"
+    _, original_segments, _ = editor.generate_subtitles(video_path, output_dir=output_dir)
+    if not original_segments:
+        yield f"[-] 错误: 未能在视频中检测到有效对白"
         return
-    yield f"✅ 成功提取 {len(segments)} 句对白"
+        
+    # 直接使用原始转录片段进行翻译，确保语义连贯性
+    segments = original_segments
+    yield f"✅ 成功提取对白时间轴 (共 {len(segments)} 句)"
 
-    # 4. 翻译
+    # 4. 翻译 (只有明确需要译文时才调用大模型)
+    import json
+    translated_cache_path = os.path.join(work_dir, f"{base_name}_translated_texts.json")
     translated_texts = []
-    if sub_mode in ["双语", "仅译文"] or use_dubbing:
-        yield f"㊙️ 步骤 3/5: 正在进行上下文关联翻译 ({sub_mode})..."
-        translated_texts = batch_translate_with_context(segments, chars_per_sec=3.8)
-        yield "✅ 翻译完成"
+    
+    must_translate = sub_mode in ["双语", "仅译文"]
+    
+    if must_translate or use_dubbing:
+        if os.path.exists(translated_cache_path):
+            yield "♻️ 发现已翻译的缓存记录，正在加载..."
+            with open(translated_cache_path, "r", encoding="utf-8") as f:
+                translated_texts = json.load(f)
+            if len(translated_texts) != len(segments):
+                yield "⚠️ 缓存与当前片段不匹配，重新开始翻译..."
+                translated_texts = []
+        
+        if not translated_texts:
+            if must_translate:
+                # 用户确实需要翻译字幕或意译配音
+                yield f"㊙️ 步骤 3/5: 正在进行大模型意译/润色 ({sub_mode})..."
+                translated_texts = batch_translate_with_context(segments, chars_per_sec=3.3)
+                with open(translated_cache_path, "w", encoding="utf-8") as f:
+                    json.dump(translated_texts, f, ensure_ascii=False, indent=2)
+                yield "✅ 翻译完成并存入缓存"
+            elif use_dubbing:
+                # 仅开启配音但字幕选了“无”或“仅原文”：直接用原话，跳过大模型
+                yield "⏭️ 字幕模式设为“仅原文/无”，配音将直接使用原始识别文本 (跳过大模型翻译)"
+                translated_texts = [seg[2] for seg in segments]
+        else:
+            yield "✅ 内容已从缓存恢复"
     else:
-        yield "⏭️ 跳过翻译步骤 (仅需原文)"
+        yield "⏭️ 跳过翻译/改写步骤"
 
-    # 5. 生成 SRT
+    # 5. 生成 SRT (带长句拆分优化)
     final_srt_path = None
     if sub_mode != "无":
-        yield "📄 正在生成字幕文件..."
+        yield "📄 正在生成字幕文件 (进行长句自动拆分)..."
         final_srt_path = os.path.join(work_dir, f"{base_name}_burn.srt")
         with open(final_srt_path, "w", encoding="utf-8") as f:
-            for i, (seg, trans) in enumerate(zip(segments, translated_texts if translated_texts else [None]*len(segments)), start=1):
+            srt_idx = 1
+            for seg, trans in zip(segments, translated_texts if translated_texts else [None]*len(segments)):
                 start, end, original = seg
-                f.write(f"{i}\n{editor.format_time(start)} --> {editor.format_time(end)}\n")
-                if sub_mode == "双语":
-                    f.write(f"{trans}\n{original}\n\n")
-                elif sub_mode == "仅译文":
-                    f.write(f"{trans}\n\n")
-                elif sub_mode == "仅原文":
-                    f.write(f"{original}\n\n")
+                duration = end - start
+                
+                # 获取拆分后的行列表 (把长句切得更细碎，单行中文控制在18字左右，原文如果也是中文则30字左右)
+                trans_lines = editor.split_text_to_lines(trans, 18) if trans else []
+                orig_lines = editor.split_text_to_lines(original, 30)
+                
+                # 按照“最多1行翻译，最多2行原文”的要求分配时间，完全阻断被超长原文长段霸屏的情况
+                num_trans_chunks = len(trans_lines)
+                num_orig_chunks = (len(orig_lines) + 1) // 2
+                num_parts = max(1, num_trans_chunks, num_orig_chunks)
+                
+                if num_parts <= 1:
+                    # 单个片段：直接写入
+                    f.write(f"{srt_idx}\n{editor.format_time(start)} --> {editor.format_time(end)}\n")
+                    w_trans = trans_lines[0] if trans_lines else ""
+                    w_orig = "\\N".join(orig_lines) if orig_lines else ""
+                    if sub_mode == "双语": f.write(f"{w_trans}\n{w_orig}\n\n")
+                    elif sub_mode == "仅译文": f.write(f"{w_trans}\n\n")
+                    elif sub_mode == "仅原文": f.write(f"{w_orig}\n\n")
+                    srt_idx += 1
+                else:
+                    # 多个片段：均分时间，使得每一块时间只显示指定数量的文本
+                    part_dur = duration / num_parts
+                    for p in range(num_parts):
+                        p_start = start + p * part_dur
+                        p_end = start + (p + 1) * part_dur
+                        
+                        # 翻译行（按比例停留）：
+                        t_start_idx = int(len(trans_lines) * (p / num_parts))
+                        t_end_idx = int(len(trans_lines) * ((p + 1) / num_parts))
+                        p_trans = "\\N".join(trans_lines[t_start_idx : max(t_start_idx + 1, t_end_idx)]) if trans_lines else ""
+                        
+                        # 原文行（按比例停留）：
+                        o_start_idx = int(len(orig_lines) * (p / num_parts))
+                        o_end_idx = int(len(orig_lines) * ((p + 1) / num_parts))
+                        p_orig = "\\N".join(orig_lines[o_start_idx : max(o_start_idx + 1, o_end_idx)]) if orig_lines else ""
+                        
+                        f.write(f"{srt_idx}\n{editor.format_time(p_start)} --> {editor.format_time(p_end)}\n")
+                        if sub_mode == "双语": f.write(f"{p_trans}\n{p_orig}\n\n")
+                        elif sub_mode == "仅译文": f.write(f"{p_trans}\n\n")
+                        elif sub_mode == "仅原文": f.write(f"{p_orig}\n\n")
+                        srt_idx += 1
 
-    # 6. F5-TTS 配音
+    # 6. Fun-CosyVoice3 配音
     dub_path = None
     if use_dubbing:
-        yield "🎧 步骤 4/5: 正在进行 F5-TTS 极速音色克隆配音 (分组流水线模式)..."
+        yield "🎧 步骤 4/5: 正在进行 Fun-CosyVoice3 (0.5B) 高保真零样本音色克隆配音..."
         dub_path = editor.generate_dubbing(segments, translated_texts, os.path.abspath(ref_voice), video_path, output_dir=output_dir)
-        yield "✅ 配音合成完成"
+        yield f"✅ 配音合成完成"
     else:
         yield "⏭️ 跳过 AI 配音"
 
@@ -140,9 +205,28 @@ def run_native_pipeline(video_path, ref_voice=None, output_dir="output", logo_pa
         except Exception as e:
             yield f"[!] 警告: 片头片尾拼接出错: {e}"
 
+    # 9. 生成封面与上传
+    best_cover = None
+    try:
+        yield "🖼️ 步骤 7/7: 正在生成封面图..."
+        cover_dir = os.path.dirname(final_video)
+        covers = generate_covers(final_video, base_name, cover_dir)
+        best_cover = covers.get("3:4") or covers.get("4:3")
+        yield "✅ 封面生成完成"
+    except Exception as e:
+        yield f"[!] 警告: 封面生成失败: {e}"
+
+    if upload:
+        yield "📤 正在自动上传到抖音/Bilibili..."
+        try:
+            auto_upload(final_video, base_name, best_cover)
+            yield "✅ 自动上传任务已提交"
+        except Exception as e:
+            yield f"[-] 自动上传失败: {e}"
+
     total_dur = time.time() - start_time
     # 最终确保 yield 消息在所有操作之后
-    yield f"SUCCESS: {final_video} | 耗时: {total_dur/60:.1f} 分钟"
+    yield f"SUCCESS: {final_video} | {best_cover if best_cover else ''} | 耗时: {total_dur/60:.1f} 分钟"
 
 if __name__ == "__main__":
     # CLI 模式依然兼容打印

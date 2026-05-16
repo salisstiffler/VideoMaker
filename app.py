@@ -3,8 +3,19 @@ import os
 import time
 import base64
 from native_main import run_native_pipeline
+from upload_utils import auto_upload
 
 st.set_page_config(page_title="VideoCapter 生产面板", layout="wide", page_icon="🎬")
+
+@st.dialog("确认手动上传")
+def confirm_upload_dialog(video_path, title, cover_path):
+    st.write(f"即将手动上传视频：**{title}**")
+    st.write("点击下方按钮开始上传到抖音和 Bilibili。")
+    if st.button("确定上传", type="primary", use_container_width=True):
+        with st.spinner("正在上传中..."):
+            auto_upload(video_path, title, cover_path)
+            st.success("✅ 手动上传任务已提交！")
+        st.rerun()
 
 # 确保必要的目录存在
 UPLOAD_DIR = "uploads"
@@ -114,6 +125,12 @@ def main():
                 outro_dur = st.number_input("片尾时长(s)", value=5.0, step=0.5)
 
         st.divider()
+
+        # 5. 社交媒体上传
+        st.subheader("🌐 社交媒体上传")
+        auto_upload_toggle = st.checkbox("制作完成后自动上传 (抖音/Bilibili)", value=True)
+
+        st.divider()
         st.info("🚀 提示：处理大型视频建议使用具备 GPU 的服务器。")
 
     # 主界面
@@ -140,7 +157,7 @@ def main():
 
             logo_html = ""
             if use_logo and st.session_state.logo_preview_url:
-                logo_html = f'<img src="{st.session_state.logo_preview_url}" style="position: absolute; {pos_css} width: 45px; height: 45px; border-radius: 50%; object-fit: cover; z-index: 100; border: 1.5px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.5);">'
+                logo_html = f'<img src="{st.session_state.logo_preview_url}" style="position: absolute; {pos_css} width: 54px; height: 54px; border-radius: 50%; object-fit: cover; z-index: 100; border: 1.5px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.5);">'
 
             sub_text = ""
             if sub_mode == "双语": sub_text = "这是中文翻译示例内容<br><span style='font-size: 0.8em; opacity: 0.8;'>This is the original English content example.</span>"
@@ -150,27 +167,22 @@ def main():
             sub_html = ""
             if sub_mode != "无":
                 rgba_bg = f"rgba({r_int}, {g_int}, {b_int}, {bg_alpha/255})"
-                sub_html = f"""
-                <div style="position: absolute; bottom: {margin_v}px; left: 50%; transform: translateX(-50%); 
-                            width: 80%; text-align: center; z-index: 101;">
-                    <span style="background-color: {rgba_bg}; color: white; padding: 4px 10px; 
-                                 font-size: {font_size}px; line-height: 1.2; border-radius: 4px; 
-                                 font-family: sans-serif; text-shadow: 1px 1px 2px black; display: inline-block;">
-                        {sub_text}
-                    </span>
-                </div>
-                """
+                sub_html = (
+                    f'<div style="position: absolute; bottom: {margin_v}px; left: 50%; transform: translateX(-50%); '
+                    f'width: 80%; text-align: center; z-index: 101;">'
+                    f'<span style="background-color: {rgba_bg}; color: white; padding: 4px 10px; '
+                    f'font-size: {font_size}px; line-height: 1.2; border-radius: 4px; '
+                    f'font-family: sans-serif; text-shadow: 1px 1px 2px black; display: inline-block;">'
+                    f'{sub_text}</span></div>'
+                )
 
-            # 核心预览叠加层
-            preview_overlay = f"""
-            <div style="position: relative; width: 100%; height: 0; margin-top: -57%; pointer-events: none; z-index: 99;">
-                <div style="position: relative; width: 100%; padding-bottom: 56.25%; overflow: hidden;">
-                    {logo_html}
-                    {sub_html}
-                </div>
-            </div>
-            <div style="height: 60px;"></div>
-            """
+            # 核心预览叠加层，去掉左侧空格缩进，避免被 Markdown 引擎当作代码块(Code Block)渲染出明文代码
+            preview_overlay = (
+                f'<div style="position: relative; width: 100%; height: 0; margin-top: -57%; pointer-events: none; z-index: 99;">'
+                f'<div style="position: relative; width: 100%; padding-bottom: 56.25%; overflow: hidden;">'
+                f'{logo_html}{sub_html}'
+                f'</div></div><div style="height: 60px;"></div>'
+            )
             st.markdown(preview_overlay, unsafe_allow_html=True)
             st.caption("💡 提示：左侧参数调整后，视频画面将实时更新模拟效果。")
 
@@ -182,6 +194,7 @@ def main():
                 
                 with st.status("🎬 正在执行全链路流水线...", expanded=True) as status:
                     final_video_path = None
+                    final_cover_path = None
                     # 循环获取生成器返回的进度消息
                     for msg in run_native_pipeline(
                         video_path=video_path,
@@ -197,13 +210,15 @@ def main():
                         use_io=use_io,
                         io_text=io_text,
                         intro_dur=intro_dur,
-                        outro_dur=outro_dur
+                        outro_dur=outro_dur,
+                        upload=auto_upload_toggle
                     ):
                         if msg.startswith("SUCCESS: "):
                             # 处理成功标志
                             parts = msg.replace("SUCCESS: ", "").split(" | ")
                             final_video_path = parts[0]
-                            status_msg = parts[1]
+                            final_cover_path = parts[1] if parts[1] else None
+                            status_msg = parts[2]
                             status.update(label=f"✅ 制作完成！{status_msg}", state="complete")
                         elif msg.startswith("[-] 错误: "):
                             st.error(msg)
@@ -217,8 +232,17 @@ def main():
                     if final_video_path and os.path.exists(final_video_path):
                         st.success("处理成功！预览与下载：")
                         st.video(final_video_path)
-                        with open(final_video_path, "rb") as f:
-                            st.download_button("📥 下载制作好的视频", f, file_name=f"final_{uploaded_file.name}")
+                        
+                        col_dl, col_up = st.columns(2)
+                        with col_dl:
+                            with open(final_video_path, "rb") as f:
+                                st.download_button("📥 下载制作好的视频", f, file_name=f"final_{uploaded_file.name}", use_container_width=True)
+                        
+                        # 如果没有勾选自动上传，则显示手动上传按钮
+                        if not auto_upload_toggle:
+                            with col_up:
+                                if st.button("🌐 立即手动上传到社交平台", use_container_width=True):
+                                    confirm_upload_dialog(final_video_path, os.path.splitext(uploaded_file.name)[0], final_cover_path)
 
 if __name__ == "__main__":
     main()

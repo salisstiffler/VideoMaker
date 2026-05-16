@@ -14,10 +14,10 @@ def get_client():
         api_key=LM_STUDIO_API_KEY
     )
 
-def translate_with_timing(text: str, duration: float, chars_per_sec: float = 3.8, context: str = "") -> str:
+def translate_with_timing(text: str, duration: float, chars_per_sec: float = 3.3, context: str = "") -> str:
     """
     根据原视频片段时长进行限长意译，支持上下文参考。
-    chars_per_sec 默认下调至 3.8，确保配音从容。
+    chars_per_sec 默认下调至 3.3，确保配音从容，且字幕文本短小精悍不霸屏。
     """
     client = get_client()
 
@@ -28,14 +28,14 @@ def translate_with_timing(text: str, duration: float, chars_per_sec: float = 3.8
         min_chars = 1
         max_chars = max(2, int(duration * 3.5)) # 短句语速要求更慢
     else:
-        min_chars = max(1, int(target_chars * 0.6))
-        max_chars = int(target_chars * 1.1) # 严格控制上限
+        min_chars = max(1, int(target_chars * 0.5))
+        max_chars = int(target_chars * 0.9) # 严格控制上限, 宁少勿多
 
     system_prompt = (
         "你是一个顶级的影视翻译官和配音导演。\n"
-        "你的目标是将英文台词翻译成中文，必须让配音员在指定时间内读完，绝对不能太长！\n"
-        "如果原文很长但给的时间很少，你必须进行大幅度删减，只保留核心意思。\n"
-        "最重要的一点就是输出的文字要顺畅。\n"
+        "你的目标是将视频台词（无论中英文）整理并翻译成最精炼、顺畅的中文白话文。\n"
+        "屏幕空间有限，字幕禁止长篇大论。如果原文很长但时间少，必须进行大幅度删减总结，只保留核心意思。\n"
+        "要求：极度精简、语言白话化、绝对不要啰嗦！千万别把一句话翻成小作文！\n"
     )
 
     brevity_note = ""

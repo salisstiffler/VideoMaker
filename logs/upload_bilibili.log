@@ -1,0 +1,85 @@
+Bilibili video upload submitted: D:\videoCapter\output\valorant_Gen.G vs Kiwoom DRX - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1\Gen.G vs Kiwoom DRX - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_valorant_final.mp4
+Bilibili video upload submitted: D:\videoCapter\output\valorant_DetonatioN FocusMe vs VARREL - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1\DetonatioN FocusMe vs VARREL - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_valorant_final.mp4
+
+[2026-04-28 20:58:22] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valorant_Cloud9 vs MIBR - HIGHLIGHTS _ VCT 2026_ Americas Stage 1\Cloud9 vs MIBR - HIGHLIGHTS _ VCT 2026_ Americas Stage 1_valorant_final.mp4
+
+[2026-04-28 21:07:03] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valorant_Sentinels vs Evil Geniuses - HIGHLIGHTS _ VCT 2026_ Americas Stage 1\Sentinels vs Evil Geniuses - HIGHLIGHTS _ VCT 2026_ Americas Stage 1_valorant_final.mp4
+
+[2026-04-28 21:15:02] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valorant_T1 vs ZETA DIVISION - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1\T1 vs ZETA DIVISION - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_valorant_final.mp4
+
+[2026-04-28 21:24:33] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valorant_Team Secret vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1\Team Secret vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_valorant_final.mp4
+
+[2026-05-07 21:18:58] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valBilibili video upload submitted: D:\videoCapter\output\valorant_Global Esports vs Rex Regum Qeon - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1\Global Esports vs Rex Regum Qeon - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_valorant_final.mp4
+
+[2026-05-08 19:48:50] Starting bilibili upload task...
+Error: [1mUnknown Error[22m
+├╴at [3mD:\a\biliup\biBilibili video upload submitted: D:\videoCapter\output\valBilibili video upload submitted: D:\videoCapter\output\valorant_Team Heretics vs Eternal Fire - HIGHLIGHTS _ VCT 2026_ EMEA Stage 1\Team Heretics vs Eternal Fire - HIGHLIGHTS _ VCT 2026_ EMEA Stage 1_valorant_final.mp4
+
+[2026-05-09 19:28:44] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valBilibili video upload submitted: D:\videoCapter\output\valorant_100 Thieves vs FURIA - HIGHLIGHTS _ VCT 2026_ Americas Stage 1\100 Thieves vs FURIA - HIGHLIGHTS _ VCT 2026_ Americas Stage 1_valorant_final.mp4
+libili video upload submitted: D:\videoCapter\output\valorant_Evil Geniuses vs KRÜ Esports - HIGHLIGHTS _ VCT 2026_ Americas Stage 1\Evil Geniuses vs KRÜ Esports - HIGHLIGHTS _ VCT 2026_ Americas Stage 1_valorant_final.mp4
+
+[2026-05-09 22:04:57] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valorant_Rex Regum Qeon vs DetonatioN FocusMe - HIGHLIGHTS _ VCT 2026_ Pacific Stage 153\Rex Regum Qeon vs DetonatioN FocusMe - HIGHLIGHTS _ VCT 2026_ Pacific Stage 153_valorant_final.mp4
+
+[2026-05-09 23:05:24] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valorant_Kiwoom DRX vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1\Kiwoom DRX vs Nongshim RedForce - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_valorant_final.mp4
+
+[2026-05-10 07:45:21] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valorant_Cloud9 vs G2 Esports - HIGHLIGHTS _ VCT 2026_ Americas Stage 1\Cloud9 vs G2 Esports - HIGHLIGHTS _ VCT 2026_ Americas Stage 1_valorant_final.mp4
+
+[2026-05-10 07:52:02] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valorant_Team Heretics vs BBL - HIGHLIGHTS _ VCT 2026_ EMEA Stage 1\Team Heretics vs BBL - HIGHLIGHTS _ VCT 2026_ EMEA Stage 1_valorant_final.mp4
+
+[2026-05-10 08:01:44] Starting bilibili upload task...
+Bilibili video upload submitted: D:\videoCapter\output\valorant_Team Liquid vs Gentle Mates - HIGHLIGHTS _ VCT 2026_ EMEA Stage 1\Team Liquid vs Gentle Mates - HIGHLIGHTS _ VCT 2026_ EMEA Stage 1_valorant_final.mp4
+
+[2026-05-10 09:47:35] Starting bilibili upload task for ENVY vs MIBR - HIGHLIGHTS _ VCT 2026_ Americas Stage 1_valorant_final.mp4...
+Traceback (most recent call last):
+  File "D:\videoCapter\output\valorant_ENVY vs MIBR - HIGHLIGHTS _ VCT 2026_ Americas Stage 1\tmp_upload_bili_094735.py", line 5, in <module>
+    from uploader_bili import BilibiliUploader
+ModuleNotFoundError: No module named 'uploader_bili'
+
+[2026-05-10 19:39:42] Starting bilibili upload task for T1 vs Rex Regum Qeon - HIGHLIGHTS - VCT 2026- Pacific Stage 1_valorant_final.mp4...
+Traceback (most recent call last):
+  File "D:\videoCapter\output\valorant_T1 vs Rex Regum Qeon - HIGHLIGHTS - VCT 2026- Pacific Stage 1\tmp_upload_bili_193942.py", line 5, in <module>
+    from uploader_bili import BilibiliUploader
+ModuleNotFoundError: No module named 'uploader_bili'
+
+[2026-05-10 22:16:00] [Direct-Trigger] Starting bilibili upload for Paper Rex vs Kiwoom DRX - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_valorant_final.mp4...
+
+[2026-05-11 19:45:41] [Direct-Trigger] Starting bilibili upload for Leviatán vs LOUD - HIGHLIGHTS _ VCT 2026_ Americas Stage 1_valorant_final.mp4...
+
+[2026-05-11 19:51:28] [Direct-Trigger] Starting bilibili upload for Sentinels vs NRG - HIGHLIGHTS _ VCT 2026_ Americas Stage 1_valorant_final.mp4...
+
+[2026-05-11 19:57:05] [Direct-Trigger] Starting bilibili upload for FNATIC vs Team Heretics - HIGHLIGHTS _ VCT 2026_ EMEA Stage 1_valorant_final.mp4...
+[*] Starting Bilibili upload for: FNATIC vs Team Heretics - HIGHLIGHTS _ VCT 2026_ EMEA Stage 1
+[-] Upload failed: Cannot connect to host upos-jd-upcdnbda2.bilivideo.com:443 ssl:default [getaddrinfo failed]
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 91, in <module>
+    sys.exit(1)
+    ^^^
+NameError: name 'sys' is not defined
+
+[2026-05-16 07:58:40] [Direct-Trigger] Starting bilibili upload for Global Esports vs FULL SENSE - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1_valorant_final.mp4...
+[*] Starting Bilibili upload for: Global Esports vs FULL SENSE - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1
+[+] Upload successful! Response: {'aid': 116581350838330, 'bvid': 'BV14t5z6tEXA'}
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 89, in <module>
+    sys.exit(0)
+    ^^^
+NameError: name 'sys' is not defined
+
+[2026-05-16 08:10:09] [Direct-Trigger] Starting bilibili upload for G2 vs 100 Thieves - HIGHLIGHTS _ VCT 2026_ Americas Stage 1_valorant_final.mp4...
+[*] Starting Bilibili upload for: G2 vs 100 Thieves - HIGHLIGHTS _ VCT 2026_ Americas Stage 1
+[+] Upload successful! Response: {'aid': 116581417885614, 'bvid': 'BV1Z25z65EA6'}
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 89, in <module>
+    sys.exit(0)
+    ^^^
+NameError: name 'sys' is not defined

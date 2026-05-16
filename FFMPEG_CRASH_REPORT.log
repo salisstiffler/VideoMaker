@@ -1,0 +1,25 @@
+CMD: ffmpeg -y -hide_banner -analyzeduration 50M -probesize 50M -i C:\Users\chenb\Downloads\Video\ENVY vs LOUD - HIGHLIGHTS - VCT 2026- Americas Stage 1.mp4 -i r_logo.jpg -filter_complex_script r_filter.txt -map [v_final] -map [0:a] -pix_fmt yuv420p -c:v h264_nvenc -preset p4 -cq 23 -c:a aac -b:a 192k D:\videoCapter\output\valorant_ENVY vs LOUD - HIGHLIGHTS - VCT 2026- Americas Stage 1\ENVY vs LOUD - HIGHLIGHTS - VCT 2026- Americas Stage 1\ENVY vs LOUD - HIGHLIGHTS - VCT 2026- Americas Stage 1_final.mp4
+ERR: -filter_complex_script is deprecated, use -/filter_complex r_filter.txt instead
+[in#0 @ 00000167b350ec00] st: 1 edit list: 1 Missing key frame while searching for timestamp: 0
+[in#0 @ 00000167b350ec00] st: 1 edit list 1 Cannot find an index entry before timestamp: 0.
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\Users\chenb\Downloads\Video\ENVY vs LOUD - HIGHLIGHTS - VCT 2026- Americas Stage 1.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 1
+    compatible_brands: isomiso2avc1mp41
+    creation_time   : 2026-04-12T03:27:49.000000Z
+  Duration: 00:28:34.75, start: 0.000000, bitrate: 4847 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 4715 kb/s, 60 fps, 60 tbr, 15360 tbn (default)
+    Metadata:
+      creation_time   : 2026-04-12T03:27:49.000000Z
+      handler_name    : ISO Media file produced by Google Inc.
+  Stream #0:1[0x2](eng): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, stereo, fltp, 128 kb/s (default)
+    Metadata:
+      creation_time   : 2026-04-12T04:56:26.000000Z
+      handler_name    : ISO Media file produced by Google Inc.
+Input #1, image2, from 'r_logo.jpg':
+  Duration: 00:00:00.04, start: 0.000000, bitrate: 4657 kb/s
+  Stream #1:0: Video: mjpeg (Baseline), yuvj420p(pc, bt470bg/unknown/unknown), 638x640 [SAR 1:1 DAR 319:320], 25 fps, 25 tbr, 25 tbn
+[out#0/mp4 @ 00000167b3f99d00] Output with label '0:a' does not exist in any defined filter graph, or was already used elsewhere.
+Error opening output file D:\videoCapter\output\valorant_ENVY vs LOUD - HIGHLIGHTS - VCT 2026- Americas Stage 1\ENVY vs LOUD - HIGHLIGHTS - VCT 2026- Americas Stage 1\ENVY vs LOUD - HIGHLIGHTS - VCT 2026- Americas Stage 1_final.mp4.
+Error opening output files: Invalid argument

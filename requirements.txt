@@ -13,3 +13,5 @@ pandas
 numpy
 tqdm
 requests
+bilibili-api-python
+playwright

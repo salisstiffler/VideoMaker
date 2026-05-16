@@ -13,6 +13,6 @@ if %errorlevel% NEQ 0 (
 )
 
 echo [*] 正在启动服务 (本地浏览器访问: http://localhost:8501)
-streamlit run app.py --server.maxUploadSize=2000
+streamlit run app.py --server.maxUploadSize=10000
 
 pause

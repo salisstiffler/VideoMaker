@@ -1,0 +1,52 @@
+[*] Starting Bilibili upload for: T1 vs Rex Regum Qeon - HIGHLIGHTS - VCT 2026- Pacific Stage 1
+[+] Upload successful! Response: {'aid': 116550380093781, 'bvid': 'BV1JT5n6FEHS'}
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 89, in <module>
+    sys.exit(0)
+    ^^^
+NameError: name 'sys' is not defined
+[*] Starting Bilibili upload for: Paper Rex vs Kiwoom DRX - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1
+[-] Upload failed: [Errno 2] No such file or directory: ''
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 91, in <module>
+    sys.exit(1)
+    ^^^
+NameError: name 'sys' is not defined
+[*] Starting Bilibili upload for: Paper Rex vs Kiwoom DRX - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1
+[-] Upload failed: [Errno 2] No such file or directory: ''
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 91, in <module>
+    sys.exit(1)
+    ^^^
+NameError: name 'sys' is not defined
+[*] Starting Bilibili upload for: Leviatán vs LOUD - HIGHLIGHTS _ VCT 2026_ Americas Stage 1
+[-] Upload failed: [Errno 2] No such file or directory: ''
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 91, in <module>
+    sys.exit(1)
+    ^^^
+NameError: name 'sys' is not defined
+[*] Starting Bilibili upload for: Leviatán vs LOUD - HIGHLIGHTS _ VCT 2026_ Americas Stage 1
+[-] Upload failed: [Errno 2] No such file or directory: ''
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 91, in <module>
+    sys.exit(1)
+    ^^^
+NameError: name 'sys' is not defined
+[*] Starting Bilibili upload for: Global Esports vs FULL SENSE - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1
+[-] Upload failed: [Errno 2] No such file or directory: ''
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 91, in <module>
+    sys.exit(1)
+    ^^^
+NameError: name 'sys' is not defined
+[*] Starting Bilibili upload for: Global Esports vs FULL SENSE - HIGHLIGHTS _ VCT 2026_ Pacific Stage 1
+[-] Upload failed: 
+Traceback (most recent call last):
+  File "D:\videoCapter\uploader_bili.py", line 91, in <module>
+    sys.exit(1)
+    ^^^
+NameError: name 'sys' is not defined
+  sys.exit(0)
+    ^^^
+NameError: name 'sys' is not defined

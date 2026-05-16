@@ -36,9 +36,18 @@ def add_logo(video_path, logo_path, output_path=None):
     print(f"[*] Logo 文件: {logo_path}")
     print(f"[*] 输出视频: {output_path}")
 
+    # 获取视频高度
+    v_height = 1080
+    try:
+        probe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=height", "-of", "csv=p=0", video_path]
+        res = subprocess.run(probe_cmd, capture_output=True, text=True)
+        v_height = int(res.stdout.strip())
+    except: pass
+
     # 这里的 filter 逻辑参考了 editor.py 中的圆形 Logo 叠加逻辑
+    logo_size = v_height // 20
     filter_str = (
-        f"[1:v]crop='min(iw,ih)':'min(iw,ih)',scale='ih/8':'ih/8',format=rgba,"
+        f"[1:v]crop='min(iw,ih)':'min(iw,ih)',scale={logo_size}:{logo_size},format=rgba,"
         f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(pow(X-W/2,2)+pow(Y-H/2,2),pow(W/2,2)),255,0)'[lready];"
         f"[0:v][lready]overlay=W-w-20:20[v_final]"
     )
