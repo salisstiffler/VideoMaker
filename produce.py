@@ -6,10 +6,13 @@ import shutil
 from downloader import VideoDownloader
 from editor import VideoEditor
 from translator_timing import batch_translate_with_context
+from intro_outro import concat_with_intro_outro
+from upload_utils import auto_upload
+from cover_generator import generate_covers
 
-def produce_final_video(url_or_path, ref_voice=None, logo_path="avrtar.jpg", output_root="output"):
+def produce_final_video(url_or_path, ref_voice=None, logo_path="avrtar.jpg", output_root="output", enable_upload=True):
     """
-    一键化生产流程：下载/读取 -> 分离 -> 对齐 -> 翻译 -> 配音 -> 合成
+    一键化生产流程：下载/读取 -> 分离 -> 对齐 -> 翻译 -> 配音 -> 合成 -> 上传
     """
     start_total = time.time()
     
@@ -50,18 +53,18 @@ def produce_final_video(url_or_path, ref_voice=None, logo_path="avrtar.jpg", out
     print(f"[🖼️] 默认 Logo: {logo_path}")
 
     # 5. UVR 深度消音
-    print("\n[🎙️] 步骤 1: UVR HQ 级消音 (彻底消除原英文)...")
+    print("\n[🎙️] 步骤 1/6: UVR HQ 级消音 (彻底消除原英文)...")
     inst_path, _ = editor.separate_audio(video_path, output_dir=output_root)
     
     # 6. WhisperX 转录与精准对齐
-    print("\n[📝] 步骤 2: WhisperX 单词级精准卡点...")
+    print("\n[📝] 步骤 2/6: WhisperX 单词级精准卡点...")
     srt_path, segments, _ = editor.generate_subtitles(video_path, output_dir=output_root)
     if not segments:
         print("[-] 错误: 提取字幕片段失败。")
         return
 
     # 7. 上下文联想翻译
-    print(f"\n[㊙️] 步骤 3: 正在进行 3.8字/秒 上下文智能翻译...")
+    print(f"\n[㊙️] 步骤 3/6: 正在进行 3.8字/秒 上下文智能翻译...")
     bilingual_srt_refined = os.path.join(work_dir, f"{base_name}_bilingual_refined.srt")
     if os.path.exists(bilingual_srt_refined):
         print("[+] 加载缓存翻译结果...")
@@ -79,14 +82,14 @@ def produce_final_video(url_or_path, ref_voice=None, logo_path="avrtar.jpg", out
                 f.write(f"{translated}\n{original}\n\n")
 
     # 8. F5-TTS 分组连贯配音
-    print("\n[🎧] 步骤 4: F5-TTS 生产级分组配音生成...")
+    print("\n[🎧] 步骤 4/6: F5-TTS 生产级分组配音生成...")
     dub_path = editor.generate_dubbing(segments, translated_texts, ref_voice, video_path, output_dir=output_root)
     if not dub_path:
         print("[-] 错误: 配音轨道生成失败。")
         return
 
     # 9. 最终合成 (含 Logo 和 侧链混音)
-    print("\n[🎬] 步骤 5: FFmpeg 全功能专业合成...")
+    print("\n[🎬] 步骤 5/6: FFmpeg 全功能专业合成...")
     final_output = editor.burn_subtitles(
         video_path=video_path,
         srt_path=bilingual_srt_refined,
@@ -102,7 +105,6 @@ def produce_final_video(url_or_path, ref_voice=None, logo_path="avrtar.jpg", out
 
     # 10. 片头片尾拼接
     try:
-        from intro_outro import concat_with_intro_outro
         final_out_with_io = os.path.join(work_dir, f"{base_name}_with_intro_outro.mp4")
         final_output = concat_with_intro_outro(
             main_video=final_output,
@@ -120,10 +122,23 @@ def produce_final_video(url_or_path, ref_voice=None, logo_path="avrtar.jpg", out
     shutil.copy(final_output, final_dest)
     print(f"[🎥] 最终大片已归档至: {final_dest}")
 
+    # 11. 自动上传
+    if enable_upload:
+        print("\n[🚀] 步骤 6/6: 正在触发后台自动发布...")
+        try:
+            covers = generate_covers(final_output, title, work_dir)
+            best_cover = covers.get("3:4") or covers.get("4:3")
+            
+            auto_upload(final_output, title, best_cover)
+            print("[+] 后台发布任务已启动。")
+        except Exception as e:
+            print(f"[!] 自动发布失败: {e}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("source")
     parser.add_argument("--voice", default=None)
     parser.add_argument("--logo", default="avrtar.jpg")
+    parser.add_argument("--no-upload", action="store_false", dest="upload", default=True, help="制作完成后不自动发布")
     args = parser.parse_args()
-    produce_final_video(args.source, args.voice, args.logo)
+    produce_final_video(args.source, args.voice, args.logo, enable_upload=args.upload)

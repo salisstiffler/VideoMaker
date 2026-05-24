@@ -159,7 +159,7 @@ def generate_intro(output_path: str, width: int = 1920, height: int = 1080,
                    font_path: str = None, text: dict = None,
                    logo_path: str = None) -> str:
     """
-    生成高度个性化、动态流动的片头视频。
+    生成高度个性化、Valorant 风格的动感片头。
     """
     import copy
     cfg = copy.deepcopy(DEFAULT_TEXT)
@@ -176,50 +176,57 @@ def generate_intro(output_path: str, width: int = 1920, height: int = 1080,
     font = font_path or _find_chinese_font()
     font_arg = _ffmpeg_font_arg(font)
 
-    # ── 背景：平滑的深色径向渐变 (优化兼容性) ──────────────────────────────
+    # ── 视觉配置 ──────────────────────────────────────────────────────────
+    # 背景: Valorant 深色 + 动态扫描线
     bg = (
-        f"color=c=0x050810:s={width}x{height}:r={fps}:d={duration},format=rgb24[base];"
-        f"[base]geq="
-        f"r='10+80*exp(-((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2))/(W*W/10))':"
-        f"g='15+110*exp(-((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2))/(W*W/10))':"
-        f"b='35+180*exp(-((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2))/(W*W/10))'[glow]"
+        f"color=c=0x0F1923:s={width}x{height}:r={fps}:d={duration},format=yuv420p[base];"
+        f"[base]geq=lum='p(X,Y)*(0.9+0.1*sin(Y/2+(n/{fps})*10))'[vbg]"
     )
 
-    # ── 滤镜链 ──────────────────────────────────────────────────────────────
-    # 文字布局 (简约居中风格)
-    hint_y = f"h/2-{height//6}"
-    main_y = f"h/2-text_h/2"
-    sub_y  = f"h/2+{height//6}"
+    # 几何装饰：红蓝斜杠动画
+    # 我们用两个彩色色块，通过 rotate 和 overlay 实现
+    # 红：0xFF4655, 蓝：0x00F5FF
+    geom = (
+        f"color=c=0xFF4655:s={width}x{height//10}:d={duration}[red_bar];"
+        f"color=c=0x00F5FF:s={width}x{height//10}:d={duration}[blue_bar];"
+        f"[red_bar]rotate=a=-30*PI/180:c=none:ow={width}:oh={height}[red_rot];"
+        f"[blue_bar]rotate=a=-30*PI/180:c=none:ow={width}:oh={height}[blue_rot];"
+        # 红条从左往右滑入
+        f"[vbg][red_rot]overlay=x='-w+t*w/1.5':y='-h/4':enable='between(t,0,1.5)'[v1];"
+        # 蓝条从右往左滑入
+        f"[v1][blue_rot]overlay=x='w-t*w/1.5':y='h/4':enable='between(t,0.2,1.7)'[v2]"
+    )
+
+    # 文字动画 (Snappy & Strong)
+    shadow = ":shadowcolor=black@0.6:shadowx=4:shadowy=4"
     
-    shadow = ":shadowcolor=black@0.8:shadowx=5:shadowy=5"
+    # 动画参数
+    t_start_hint = 0.5
+    t_start_main = 0.8
+    t_start_sub  = 1.3
 
     txt_filters = (
-        # 装饰性水平线 (上下对称)
-        f"[glow]drawbox=x=0:y={height//2-height//10}:w={width}:h=1:"
-        f"color=white@0.2:t=fill:enable='gte(t,0.5)'[hline1];"
-        f"[hline1]drawbox=x=0:y={height//2+height//10}:w={width}:h=1:"
-        f"color=white@0.2:t=fill:enable='gte(t,0.5)'[hline2];"
+        # 顶部 Hint (极小，带间距感)
+        f"[v2]drawtext=text='{channel_hint}'{font_arg}{shadow}:"
+        f"fontsize={height//25}:fontcolor=0x00F5FF:"
+        f"x=(w-text_w)/2:y=h/2-{height//5}:"
+        f"alpha='if(lt(t,{t_start_hint}),0,if(lt(t,{t_start_hint+0.3}),(t-{t_start_hint})/0.3,1))'[v3];"
 
-        # 频道装饰语 (Hint)
-        f"[hline2]drawtext=text='{channel_hint}'{font_arg}{shadow}:"
-        f"fontsize={height//22}:fontcolor=0x62AEDB@0.8:"
-        f"x=(w-text_w)/2:y={hint_y}:"
-        f"alpha='if(lt(t,0.3),0,min(1,(t-0.3)/0.6))'[subt];"
+        # 主标题 (加粗感，快速弹出)
+        f"[v3]drawtext=text='{welcome_text}'{font_arg}{shadow}:"
+        f"fontsize={height//8}:fontcolor=white:"
+        f"x=(w-text_w)/2:y=(h-text_h)/2:"
+        f"alpha='if(lt(t,{t_start_main}),0,if(lt(t,{t_start_main+0.2}),1,1))':" # 瞬时出现
+        f"enable='gte(t,{t_start_main})'[v4];"
         
-        # 主标题 (Main)
-        f"[subt]drawtext=text='{welcome_text}'{font_arg}{shadow}:"
-        f"fontsize={height//10}:fontcolor=white@1:"
-        f"x=(w-text_w)/2:y={main_y}:"
-        f"alpha='if(lt(t,1.0),0,min(1,(t-1.0)/0.7))'[main_txt];"
-        
-        # 底部标语 (Sub)
-        f"[main_txt]drawtext=text='{sub_hint}'{font_arg}{shadow}:"
-        f"fontsize={height//24}:fontcolor=0xFFD700@0.8:"
-        f"x=(w-text_w)/2:y={sub_y}:"
-        f"alpha='if(lt(t,1.8),0,min(1,(t-1.8)/0.6))'[out_v]"
+        # 底部标语 (金色点缀)
+        f"[v4]drawtext=text='{sub_hint}'{font_arg}{shadow}:"
+        f"fontsize={height//22}:fontcolor=0xFFD700:"
+        f"x=(w-text_w)/2:y=h/2+{height//5}:"
+        f"alpha='if(lt(t,{t_start_sub}),0,min(1,(t-{t_start_sub})/0.5))'[out_v]"
     )
 
-    filter_complex = f"{bg};{txt_filters};anullsrc=r=48000:cl=stereo[out_a]"
+    filter_complex = f"{bg};{geom};{txt_filters};anullsrc=r=48000:cl=stereo[out_a]"
 
     cmd = (
         ["ffmpeg", "-y",
@@ -231,7 +238,7 @@ def generate_intro(output_path: str, width: int = 1920, height: int = 1080,
         + _vcodec_args()
         + ["-t", str(duration), "-pix_fmt", "yuv420p", output_path]
     )
-    print(f"[片头] 正在生成个性化版本... → {output_path}")
+    print(f"[片头] 正在生成 Valorant 风格版本... → {output_path}")
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg 片头生成失败:\n{result.stderr[-2000:]}")
@@ -243,7 +250,7 @@ def generate_outro(output_path: str, width: int = 1920, height: int = 1080,
                    font_path: str = None, text: dict = None,
                    logo_path: str = None) -> str:
     """
-    生成个性化、温馨的片尾视频。
+    生成高度个性化、Valorant 风格的片尾。
     """
     import copy
     cfg = copy.deepcopy(DEFAULT_TEXT)
@@ -264,83 +271,69 @@ def generate_outro(output_path: str, width: int = 1920, height: int = 1080,
     font_arg = _ffmpeg_font_arg(font)
     logo = logo_path or _find_avatar()
 
-    # ── 背景：深紫梦幻渐变 (优化兼容性) ──────────────────────────────────────
+    # ── 背景 ──────────────────────────────────────────────────────────────
     bg = (
-        f"color=c=0x100520:s={width}x{height}:r={fps}:d={duration},format=rgb24[base];"
-        f"[base]geq="
-        f"r='20+120*exp(-((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2))/(W*W/8))':"
-        f"g='10+60*exp(-((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2))/(W*W/8))':"
-        f"b='45+170*exp(-((X-W/2)*(X-W/2)+(Y-H/2)*(Y-H/2))/(W*W/8))'[glow]"
+        f"color=c=0x0F1923:s={width}x{height}:r={fps}:d={duration},format=yuv420p[base];"
+        f"[base]geq=lum='p(X,Y)*(0.85+0.15*sin(hypot(X-W/2,Y-H/2)/10-T*5))'[vbg]"
     )
 
-    inputs = [
-        "-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}:d={duration}"
-    ]
+    inputs = ["-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}:d={duration}"]
     
     logo_filter = ""
     if logo:
-        logo_size = height // 20
+        logo_size = height // 6
         inputs.extend(["-i", logo])
         logo_filter = (
             f"[1:v]scale={logo_size}:{logo_size},format=rgba,"
-            f"geq=lum='p(X,Y)':a='if(lt(hypot(X-{logo_size}/2,Y-{logo_size}/2),{logo_size}/2-2),255,0)',"
-            f"split=2[lr1][lr2];"
-            f"[lr1]pad={logo_size+16}:{logo_size+16}:8:8:0x00000000,"
-            f"boxblur=8:1[logo_glow];"
-            f"[logo_glow][lr2]overlay=8:8:format=rgb[logo_final];"
+            f"geq=lum='p(X,Y)':a='if(lt(hypot(X-{logo_size}/2,Y-{logo_size}/2),{logo_size}/2-2),255,0)'[logo_circ];"
+            f"[vbg][logo_circ]overlay=W-w-100:100:format=rgb[v1]"
         )
-        # 将头像叠加到背景 (右上角)
-        logo_overlay = (
-            f"[logo_final]fade=t=in:st=0.5:d=0.8:alpha=1[logo_faded];"
-            f"[glow][logo_faded]overlay=W-w-80:80:format=rgb[bg_with_logo];"
-        )
-        start_node = "[bg_with_logo]"
+        start_node = "[v1]"
     else:
-        logo_filter = ""
-        logo_overlay = ""
-        start_node = "[glow]"
+        start_node = "[vbg]"
 
-    shadow = ":shadowcolor=black@0.7:shadowx=4:shadowy=4"
-    icon_y = height // 2 + height // 8
-    icon_spacing = width // 5
-
+    # ── 文字布局 ──────────────────────────────────────────────────────────
+    shadow = ":shadowcolor=black@0.7:shadowx=5:shadowy=5"
+    
     txt_filters = (
-        # 感谢主标题 (居中靠上)
+        # 感谢语 (左侧对齐风格)
         f"{start_node}drawtext=text='{outro_text}'{font_arg}{shadow}:"
-        f"fontsize={height//12}:fontcolor=white@1:"
-        f"x=(w-text_w)/2:y=(h/2)-{height//4}:"
-        f"alpha='if(lt(t,0.3),0,min(1,(t-0.3)/0.7))'[t1];"
+        f"fontsize={height//12}:fontcolor=white:"
+        f"x=100:y=h/2-{height//4}:"
+        f"alpha='if(lt(t,0.3),0,min(1,(t-0.3)/0.6))'[t1];"
         
         # 副标题
         f"[t1]drawtext=text='{sub_text1}'{font_arg}{shadow}:"
-        f"fontsize={height//20}:fontcolor=0xFFD700@0.9:"
-        f"x=(w-text_w)/2:y=(h/2)-{height//10}:"
-        f"alpha='if(lt(t,1.2),0,min(1,(t-1.2)/0.6))'[t2];"
+        f"fontsize={height//22}:fontcolor=0x00F5FF:"
+        f"x=100:y=h/2-{height//10}:"
+        f"alpha='if(lt(t,0.8),0,min(1,(t-0.8)/0.6))'[t2];"
         
-        # 互动图标文字布局
-        f"[t2]drawtext=text='{like_txt}'{font_arg}{shadow}:"
-        f"fontsize={height//18}:fontcolor=0x62AEDB@1:"
-        f"x={width//2}-{icon_spacing}-text_w/2:y={icon_y}:"
-        f"alpha='if(lt(t,1.8),0,min(1,(t-1.8)/0.5))'[t3];"
+        # 互动区 (底部横向排布)
+        f"[t2]drawbox=x=0:y={height-height//4}:w={width}:h=4:color=white@0.3:t=fill[v_line];"
+        
+        f"[v_line]drawtext=text='{like_txt}'{font_arg}{shadow}:"
+        f"fontsize={height//18}:fontcolor=white:"
+        f"x=100:y={height-height//6}:"
+        f"alpha='if(lt(t,1.4),0,min(1,(t-1.4)/0.4))'[it1];"
 
-        f"[t3]drawtext=text='{sub_txt}'{font_arg}{shadow}:"
-        f"fontsize={height//18}:fontcolor=0xF28C38@1:"
-        f"x=(w-text_w)/2:y={icon_y}:"
-        f"alpha='if(lt(t,2.3),0,min(1,(t-2.3)/0.5))'[t4];"
+        f"[it1]drawtext=text='{sub_txt}'{font_arg}{shadow}:"
+        f"fontsize={height//18}:fontcolor=white:"
+        f"x=100+w/5:y={height-height//6}:"
+        f"alpha='if(lt(t,1.8),0,min(1,(t-1.8)/0.4))'[it2];"
 
-        f"[t4]drawtext=text='{share_txt}'{font_arg}{shadow}:"
-        f"fontsize={height//18}:fontcolor=0xF05050@1:"
-        f"x={width//2}+{icon_spacing}-text_w/2:y={icon_y}:"
-        f"alpha='if(lt(t,2.8),0,min(1,(t-2.8)/0.5))'[t5];"
+        f"[it2]drawtext=text='{share_txt}'{font_arg}{shadow}:"
+        f"fontsize={height//18}:fontcolor=white:"
+        f"x=100+w*2/5:y={height-height//6}:"
+        f"alpha='if(lt(t,2.2),0,min(1,(t-2.2)/0.4))'[it3];"
 
-        # 底部落款
-        f"[t5]drawtext=text='{bye_txt}'{font_arg}{shadow}:"
-        f"fontsize={height//24}:fontcolor=white@0.6:"
-        f"x=(w-text_w)/2:y=h-{height//10}:"
-        f"alpha='if(lt(t,3.8),0,min(1,(t-3.8)/0.6))'[out_v]"
+        # 最终落款 (右下角)
+        f"[it3]drawtext=text='{bye_txt}'{font_arg}{shadow}:"
+        f"fontsize={height//26}:fontcolor=white@0.5:"
+        f"x=w-text_w-100:y=h-text_h-100:"
+        f"alpha='if(lt(t,3.0),0,min(1,(t-3.0)/0.5))'[out_v]"
     )
 
-    filter_complex = f"{bg};{logo_filter}{logo_overlay}{txt_filters};anullsrc=r=48000:cl=stereo[out_a]"
+    filter_complex = f"{bg};{logo_filter}{txt_filters};anullsrc=r=48000:cl=stereo[out_a]"
 
     cmd = (
         ["ffmpeg", "-y"]
@@ -351,7 +344,7 @@ def generate_outro(output_path: str, width: int = 1920, height: int = 1080,
         + _vcodec_args()
         + ["-t", str(duration), "-pix_fmt", "yuv420p", output_path]
     )
-    print(f"[片尾] 正在生成... → {output_path}")
+    print(f"[片尾] 正在生成 Valorant 风格版本... → {output_path}")
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         raise RuntimeError(f"FFmpeg 片尾生成失败:\n{result.stderr[-2000:]}")

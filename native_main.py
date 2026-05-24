@@ -5,7 +5,6 @@ import time
 from editor import VideoEditor
 from translator_timing import batch_translate_with_context
 from cover_generator import generate_covers
-from upload_utils import auto_upload
 
 # ── 片头片尾配置 ──────────────────────────────────────────────────────────────
 INTRO_OUTRO_CONFIG = {
@@ -26,7 +25,7 @@ def find_default_voice():
         return p
     return None
 
-def run_native_pipeline(video_path, ref_voice=None, output_dir="output", logo_path=None, margin_v=20, sub_mode="双语", use_dubbing=True, logo_pos="top-right", logo_margin=(20, 20), sub_style=None, use_io=True, io_text=None, intro_dur=4.0, outro_dur=5.0, upload=True):
+def run_native_pipeline(video_path, ref_voice=None, output_dir="output", logo_path=None, margin_v=20, sub_mode="双语", use_dubbing=True, logo_pos="top-right", logo_margin=(20, 20), sub_style=None, use_io=True, io_text=None, intro_dur=4.0, outro_dur=5.0):
     """
     全链路原生翻译配音生产流程 (进度汇报版)
     使用 yield 返回进度消息
@@ -205,7 +204,7 @@ def run_native_pipeline(video_path, ref_voice=None, output_dir="output", logo_pa
         except Exception as e:
             yield f"[!] 警告: 片头片尾拼接出错: {e}"
 
-    # 9. 生成封面与上传
+    # 9. 生成封面
     best_cover = None
     try:
         yield "🖼️ 步骤 7/7: 正在生成封面图..."
@@ -216,14 +215,6 @@ def run_native_pipeline(video_path, ref_voice=None, output_dir="output", logo_pa
     except Exception as e:
         yield f"[!] 警告: 封面生成失败: {e}"
 
-    if upload:
-        yield "📤 正在自动上传到抖音/Bilibili..."
-        try:
-            auto_upload(final_video, base_name, best_cover)
-            yield "✅ 自动上传任务已提交"
-        except Exception as e:
-            yield f"[-] 自动上传失败: {e}"
-
     total_dur = time.time() - start_time
     # 最终确保 yield 消息在所有操作之后
     yield f"SUCCESS: {final_video} | {best_cover if best_cover else ''} | 耗时: {total_dur/60:.1f} 分钟"
@@ -233,7 +224,22 @@ if __name__ == "__main__":
     def cli_run():
         parser = argparse.ArgumentParser()
         parser.add_argument("video")
+        parser.add_argument("--no-upload", action="store_false", dest="upload", default=True, help="制作完成后不自动上传")
         args = parser.parse_args()
+        
+        final_video = None
+        best_cover = None
+        
         for msg in run_native_pipeline(args.video):
             print(msg)
+            if msg.startswith("SUCCESS: "):
+                parts = msg.replace("SUCCESS: ", "").split(" | ")
+                final_video = parts[0]
+                best_cover = parts[1] if parts[1] else None
+        
+        if args.upload and final_video:
+            from upload_utils import auto_upload
+            title = os.path.splitext(os.path.basename(final_video))[0].replace("_full_production", "")
+            print(f"[*] 正在触发后台自动上传: {title}")
+            auto_upload(final_video, title, best_cover)
     cli_run()

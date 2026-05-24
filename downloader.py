@@ -12,10 +12,16 @@ class VideoDownloader:
         # Align with latest desktop script: Use proxy = False
         self.proxy = "http://127.0.0.1:7890"
         self.use_proxy = False
-        self.cookies_file = "cookies.txt"
-        if not os.path.exists(self.cookies_file):
-            if os.path.exists("youtube_cookies.txt"):
-                self.cookies_file = "youtube_cookies.txt"
+        
+        # Priority: cookies.json > cookies.txt > youtube_cookies.txt
+        if os.path.exists("cookies.json"):
+            self.cookies_file = "cookies.json"
+        elif os.path.exists("cookies.txt"):
+            self.cookies_file = "cookies.txt"
+        elif os.path.exists("youtube_cookies.txt"):
+            self.cookies_file = "youtube_cookies.txt"
+        else:
+            self.cookies_file = "cookies.txt" # Default fallback
 
     def clean_filename(self, filename: str) -> str:
         """Windows-safe filename cleaning."""
@@ -100,7 +106,6 @@ class VideoDownloader:
             'cookies': self.cookies_file,
             'writethumbnail': True,  # 🚀 新增：获取封面
             'postprocessors': [
-                {'key': 'FFmpegExtractAudio', 'preferredcodec': 'm4a', 'preferredquality': '192'},
                 {'key': 'FFmpegThumbnailsConvertor', 'format': 'jpg', 'when': 'before_dl'}, # 🚀 将封面转为 jpg
             ],
             'extractor_args': {

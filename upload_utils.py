@@ -5,9 +5,9 @@ import datetime
 import glob
 from dotenv import load_dotenv
 
-def auto_upload(video_path, title, cover_path=None):
+def auto_upload(video_path, title, cover_path=None, platforms=["douyin", "bilibili"]):
     """
-    立即在后台启动当前视频的抖音和 Bilibili 上传任务
+    立即在后台启动当前视频的社交平台上传任务
     """
     load_dotenv()
     video_path = os.path.abspath(video_path)
@@ -15,8 +15,9 @@ def auto_upload(video_path, title, cover_path=None):
     video_filename = os.path.basename(video_path)
     
     # 封面自动适配逻辑
-    cover_4_3 = glob.glob(os.path.join(video_dir, "*_cover_4_3.jpg"))
-    cover_3_4 = glob.glob(os.path.join(video_dir, "*_cover_3_4.jpg"))
+    # 尝试在视频同级目录或父目录找封面
+    cover_4_3 = glob.glob(os.path.join(video_dir, "*_cover_4_3.jpg")) or glob.glob(os.path.join(video_dir, "cover_4_3.jpg"))
+    cover_3_4 = glob.glob(os.path.join(video_dir, "*_cover_3_4.jpg")) or glob.glob(os.path.join(video_dir, "cover_3_4.jpg"))
     
     # 抖音优先 3:4 (竖屏)，B站优先 4:3 (横屏)
     best_cover_douyin = cover_path
@@ -26,14 +27,6 @@ def auto_upload(video_path, title, cover_path=None):
     best_cover_bili = cover_path
     if not best_cover_bili or "_cover_3_4" in best_cover_bili:
         if cover_4_3: best_cover_bili = cover_4_3[0]
-
-    # 1. 抖音上传指令
-    cmd_douyin = [sys.executable, "uploader_douyin.py", "--video", video_path, "--title", title]
-    if best_cover_douyin: cmd_douyin.extend(["--cover", best_cover_douyin])
-
-    # 2. Bilibili 上传指令 (直接使用 CLI)
-    cmd_bili = [sys.executable, "uploader_bili.py", "--video", video_path, "--title", title]
-    if best_cover_bili: cmd_bili.extend(["--cover", best_cover_bili])
 
     # Windows 静默启动标志
     CREATE_NO_WINDOW = 0x08000000
@@ -58,6 +51,14 @@ def auto_upload(video_path, title, cover_path=None):
         except Exception as e:
             print(f"[-] 启动 {platform_name} 上传失败: {e}")
 
-    # 并发启动两个平台的上传
-    run_in_bg(cmd_douyin, "douyin")
-    run_in_bg(cmd_bili, "bilibili")
+    # 1. 抖音上传
+    if "douyin" in platforms:
+        cmd_douyin = [sys.executable, "uploader_douyin.py", "--video", video_path, "--title", title]
+        if best_cover_douyin: cmd_douyin.extend(["--cover", best_cover_douyin])
+        run_in_bg(cmd_douyin, "douyin")
+
+    # 2. Bilibili 上传
+    if "bilibili" in platforms:
+        cmd_bili = [sys.executable, "uploader_bili.py", "--video", video_path, "--title", title]
+        if best_cover_bili: cmd_bili.extend(["--cover", best_cover_bili])
+        run_in_bg(cmd_bili, "bilibili")
